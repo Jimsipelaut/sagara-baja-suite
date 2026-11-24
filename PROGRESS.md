@@ -13,17 +13,17 @@ Legenda: `[x]` selesai, `[~]` sedang dikerjakan, `[ ]` belum mulai, `[!]` terblo
 |---|---|
 | SRS v0.1 | Selesai (draft, menunggu jawaban klien) |
 | Desain arsitektur gabungan | Selesai (usulan) |
-| Kode | Belum dimulai |
+| Kode | Sprint 0 (Core) Selesai |
 | Klien: jawaban pertanyaan terbuka | Menunggu |
 
 ## 2. Rencana Sprint
 
 ### Sprint 0 - Core
-- [ ] Bootstrap plugin dan sistem migrasi tabel
-- [ ] Peran dan capability (Owner, Admin, Kasir, Gudang, Keuangan, Karyawan)
-- [ ] Audit log (append-only)
-- [ ] Penomoran dokumen (resmi, non-resmi, PO, dll.) tanpa celah dan aman dari race condition
-- [ ] Halaman pengaturan (profil toko, zona waktu, mata uang)
+- [x] Bootstrap plugin dan sistem migrasi tabel
+- [x] Peran dan capability (Owner, Admin, Kasir, Gudang, Keuangan, Karyawan)
+- [x] Audit log (append-only)
+- [x] Penomoran dokumen (resmi, non-resmi, PO, dll.) tanpa celah dan aman dari race condition
+- [x] Halaman pengaturan (profil toko, zona waktu, mata uang)
 
 ### Sprint 1 - Inventory dan master data
 - [ ] Barang, kategori, satuan dan konversi
@@ -75,6 +75,8 @@ Legenda: `[x]` selesai, `[~]` sedang dikerjakan, `[ ]` belum mulai, `[!]` terblo
 | 2026-11-24 | Modul kasir masuk Fase 1 | Kasir adalah pintu transaksi harian |
 | 2026-11-24 | Modul LMS tidak dimasukkan | Di luar kebutuhan |
 | 2026-11-24 | Invoice non-resmi tetap tercatat di sistem | Mencegah penjualan nyata keluar dari pembukuan |
+| 2026-11-24 | Core arsitektur Sprint 0 selesai dengan unit test mandiri | Memastikan audit log, sequence number berurutan/lock-safe, hak akses, dan pengaturan toko lolos pengujian tanpa dependensi sebelum modul inventory |
+| 2026-11-24 | WordPress local runtime ditautkan via junction di Laragon (`C:\laragon\www\sagara-baja`) | Memungkinkan testing runtime WordPress nyata tanpa mencemari repo plugin dengan source core WordPress |
 
 ## 4. Pertanyaan Terbuka (menunggu klien)
 
@@ -100,6 +102,16 @@ Legenda: `[x]` selesai, `[~]` sedang dikerjakan, `[ ]` belum mulai, `[!]` terblo
 | Hosting lemah | Kasir lambat | Spesifikasi minimum, cache, uji beban 10.000 SKU |
 
 ## 6. Changelog
+
+### 0.2.0-core (2026-11-24)
+- Entrypoint plugin `sagara-baja-suite.php` dibuat dengan verifikasi PHP 8.1 dan hooks.
+- Autoloader PSR-4 untuk namespace `SagaraBaja\Core` dan `SagaraBaja\Modules`.
+- Sistem migrasi tabel otomatis (`sb_schema_versions`) dengan migrasi awal `Migration_001_Initial_Core`.
+- Pendaftaran 6 peran: `sb_owner`, `sb_admin`, `sb_cashier`, `sb_warehouse`, `sb_finance`, `sb_employee` beserta capabilities.
+- Audit logger append-only (`sb_audit_logs`) dengan pelacakan pengguna, payload JSON, dan IP.
+- Layanan penomoran dokumen transaksional berurutan bebas celah (`sb_document_sequences`) dengan row lock `FOR UPDATE`.
+- Panel admin WordPress (Dashboard, Pengaturan Toko, dan Penampil Audit Log) dengan verifikasi nonce dan capability.
+- Test suite mandiri 13 assertions lulus 100% dan lolos `php -l`.
 
 ### 0.1.0-planning (2026-11-24)
 - SRS v0.1 dibuat (modul inventory, invoice, pembukuan, HR, absensi, lembur, gaji)
