@@ -5,6 +5,7 @@ use SagaraBaja\Core\Auth\Roles;
 use SagaraBaja\Core\Database\Migrator;
 use SagaraBaja\Core\Admin\AdminMenu;
 use SagaraBaja\Core\Audit\AuditLogger;
+use SagaraBaja\Modules\Inventory\Admin\InventoryAdmin;
 
 if ( ! defined( 'ABSPATH' ) && ! defined( 'SB_TEST_SUITE' ) ) {
     exit;
@@ -34,6 +35,7 @@ class Plugin {
         // Registrasi menu dan antarmuka admin
         if ( is_admin() ) {
             AdminMenu::register();
+            InventoryAdmin::register();
         }
 
         // Jalankan hook modul-modul

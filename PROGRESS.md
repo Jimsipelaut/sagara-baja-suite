@@ -13,7 +13,7 @@ Legenda: `[x]` selesai, `[~]` sedang dikerjakan, `[ ]` belum mulai, `[!]` terblo
 |---|---|
 | SRS v0.1 | Selesai (draft, menunggu jawaban klien) |
 | Desain arsitektur gabungan | Selesai (usulan) |
-| Kode | Sprint 0 (Core) Selesai |
+| Kode | Sprint 0 (Core) & Sprint 1 (Inventory) Selesai |
 | Klien: jawaban pertanyaan terbuka | Menunggu |
 
 ## 2. Rencana Sprint
@@ -26,11 +26,11 @@ Legenda: `[x]` selesai, `[~]` sedang dikerjakan, `[ ]` belum mulai, `[!]` terblo
 - [x] Halaman pengaturan (profil toko, zona waktu, mata uang)
 
 ### Sprint 1 - Inventory dan master data
-- [ ] Barang, kategori, satuan dan konversi
-- [ ] Harga bertingkat (eceran, grosir, proyek)
-- [ ] Gudang dan kartu stok (sb_stock_moves)
-- [ ] Impor Excel/CSV dengan validasi
-- [ ] Stock opname dengan persetujuan
+- [x] Barang, kategori, satuan dan konversi
+- [x] Harga bertingkat (eceran, grosir, proyek)
+- [x] Gudang dan kartu stok (sb_stock_moves)
+- [x] Impor Excel/CSV dengan validasi
+- [x] Stock opname dengan persetujuan
 
 ### Sprint 2 - Sales, POS, Invoice
 - [ ] Pelanggan dan supplier
@@ -77,6 +77,9 @@ Legenda: `[x]` selesai, `[~]` sedang dikerjakan, `[ ]` belum mulai, `[!]` terblo
 | 2026-11-24 | Invoice non-resmi tetap tercatat di sistem | Mencegah penjualan nyata keluar dari pembukuan |
 | 2026-11-24 | Core arsitektur Sprint 0 selesai dengan unit test mandiri | Memastikan audit log, sequence number berurutan/lock-safe, hak akses, dan pengaturan toko lolos pengujian tanpa dependensi sebelum modul inventory |
 | 2026-11-24 | WordPress local runtime ditautkan via junction di Laragon (`C:\laragon\www\sagara-baja`) | Memungkinkan testing runtime WordPress nyata tanpa mencemari repo plugin dengan source core WordPress |
+| 2026-11-24 | Data dummy material bangunan toko besi & baja (8 SKU representatif) | Permintaan owner menggunakan dummy data dulu untuk kategori material besi, baja ringan, semen, pasir, spandek, triplek |
+| 2026-11-24 | Harga bertingkat (eceran, grosir, proyek) dan modal disimpan integer murni | Memenuhi aturan SOUL.md: tidak menggunakan float untuk nilai moneter |
+| 2026-11-24 | Row lock `FOR UPDATE` dan penolakan stok minus default pada mutasi stok | Memastikan integritas saldo fisik vs kartu stok (`sb_stock_moves`) dan mencegah race condition saat multi-kasir |
 
 ## 4. Pertanyaan Terbuka (menunggu klien)
 
@@ -102,6 +105,17 @@ Legenda: `[x]` selesai, `[~]` sedang dikerjakan, `[ ]` belum mulai, `[!]` terblo
 | Hosting lemah | Kasir lambat | Spesifikasi minimum, cache, uji beban 10.000 SKU |
 
 ## 6. Changelog
+
+### 0.2.0-inventory (2026-11-24)
+- Migrasi database `Migration_002_Inventory` membuat 9 tabel: `sb_categories`, `sb_units`, `sb_warehouses`, `sb_products`, `sb_unit_conversions`, `sb_stock_balances`, `sb_stock_moves`, `sb_stock_opnames`, `sb_stock_opname_items`.
+- `UnitConversionService`: Konversi multi-satuan material (batang, ikat, zak, ton, kg, m3, lembar) dengan pembuktian direct & inverse ratio serta validasi kuantitas positif.
+- `ProductRepository`: CRUD master produk dengan SKU unik dan 3 tier harga integer (`sell_price_retail`, `sell_price_wholesale`, `sell_price_project`).
+- `StockService`: Mutasi stok berbasis kartu stok transaksional (`sb_stock_moves`), saldo berjalan (`sb_stock_balances`), row lock `FOR UPDATE`, pencegahan stok minus default, transfer antar gudang, dan fungsi rekonsiliasi saldo vs mutasi.
+- `StockOpnameService`: Alur opname lengkap dari draft, verifikasi fisik, approval, hingga posting penyesuaian otomatis ke kartu stok.
+- `CsvImportService`: Fasilitas impor data produk batch via CSV dengan pembungkusan transaksi database.
+- `DummyDataSeeder`: Seeder otomatis master data material bangunan (besi beton polos/ulir SNI, kanal C, reng baja ringan, semen 50kg, pasir pasang, spandek pasir, triplek cor) lengkap dengan saldo awal di gudang utama & toko.
+- `InventoryAdmin`: Tampilan admin WordPress untuk Master Barang, Kartu Stok Mutasi, Stock Opname, Impor CSV, dan tombol inisialisasi Seeder dummy.
+- Unit Test suite inventory lengkap (27 test cases pass 100%, lolos `php -l`).
 
 ### 0.2.0-core (2026-11-24)
 - Entrypoint plugin `sagara-baja-suite.php` dibuat dengan verifikasi PHP 8.1 dan hooks.
