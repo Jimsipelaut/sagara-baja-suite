@@ -11,6 +11,19 @@ if ( ! defined( 'ABSPATH' ) && ! defined( 'SB_TEST_SUITE' ) ) {
 class SettingsRepository {
     public const OPTION_KEY = 'sb_settings';
 
+    private ?\wpdb $wpdb;
+
+    public function __construct( ?\wpdb $wpdb = null ) {
+        $this->wpdb = $wpdb;
+    }
+
+    /**
+     * Dapatkan semua setting (alias instans untuk kompatibilitas).
+     */
+    public function all(): array {
+        return self::get_all();
+    }
+
     /**
      * Konfigurasi bawaan sistem.
      */
