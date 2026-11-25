@@ -290,7 +290,14 @@ class SaleService {
 
 	public function getItems( int $sale_id ): array {
 		return (array) $this->wpdb->get_results(
-			$this->wpdb->prepare( "SELECT * FROM {$this->t_items} WHERE sale_id = %d", $sale_id ),
+			$this->wpdb->prepare(
+				"SELECT i.*, p.name AS product_name, p.sku AS product_sku, u.name AS unit_name
+				 FROM {$this->t_items} i
+				 LEFT JOIN {$this->wpdb->prefix}sb_products p ON p.id = i.product_id
+				 LEFT JOIN {$this->wpdb->prefix}sb_units u ON u.id = i.unit_id
+				 WHERE i.sale_id = %d",
+				$sale_id
+			),
 			ARRAY_A
 		);
 	}
