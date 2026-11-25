@@ -21,6 +21,9 @@ final class Capabilities {
 
     // Penjualan & POS
     public const ACCESS_POS           = 'sb_access_pos';
+    public const VIEW_SALES           = 'sb_view_sales';
+    public const PROCESS_SALE         = 'sb_process_sale';
+    public const MANAGE_SHIFTS        = 'sb_manage_shifts';
     public const CREATE_SALES         = 'sb_create_sales';
     public const CREATE_INVOICE_RESMI = 'sb_create_invoice_resmi';
     public const CREATE_NOTA_NONRESMI = 'sb_create_nota_nonresmi';
