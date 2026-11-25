@@ -23,7 +23,9 @@ desktop.ini
 
 # Logs and databases
 *.log
+# File SQL diabaikan secara global, kecuali yang ada di folder database/
 *.sql
+!database/*.sql
 *.sqlite
 
 # Archives and build artifacts
