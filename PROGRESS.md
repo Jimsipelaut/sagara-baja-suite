@@ -35,7 +35,8 @@ Legenda: `[x]` selesai, `[~]` sedang dikerjakan, `[ ]` belum mulai, `[!]` terblo
 ### Sprint 2 - Sales, POS, Invoice
 - [x] Pelanggan dan supplier
 - [x] Penjualan dan pembatalan (void) dengan pembalikan mutasi stok otomatis
-- [x] Layar kasir (POS), shift kasir buka/tutup, modal awal & akhir
+- [x] Layar kasir (POS) Admin & Frontend Shortcode `[sb_pos]`, shift kasir buka/tutup, modal awal & akhir
+- [x] Halaman utama toko (`/pos/` & root `/`) otomatis terhubung ke antarmuka terminal POS Kasir responsif
 - [x] Invoice resmi dan nota non-resmi, cetak thermal struk & PDF browser-ready (Rp0)
 - [x] Pembayaran tunai/transfer/tempo, alokasi pembayaran, dan tracking status lunas/sebagian
 

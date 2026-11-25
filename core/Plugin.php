@@ -40,6 +40,9 @@ class Plugin {
             SalesAdmin::register();
         }
 
+        // Registrasi antarmuka Kasir POS Frontend & Shortcode [sb_pos]
+        \SagaraBaja\Modules\Sales\Frontend\PosFrontend::register();
+
         // Jalankan hook modul-modul
         do_action( 'sb_suite_loaded' );
     }
@@ -63,6 +66,9 @@ class Plugin {
             null,
             [ 'executed_migrations' => $executed ]
         );
+
+        // 4. Pastikan laman Kasir POS terpasang & menjadi beranda utama
+        \SagaraBaja\Modules\Sales\Frontend\PosFrontend::ensure_pos_page( true );
 
         flush_rewrite_rules();
     }
