@@ -2,7 +2,7 @@
 
 Sistem inventory, kasir (POS), dan invoice untuk **Sagara Baja** — toko material dan logistik bangunan di Setu, Bekasi. Dibangun sebagai plugin WordPress kustom dengan tabel database sendiri (prefix `wp_sb_*`), tanpa dependensi WooCommerce.
 
-> Status: **Sprint 2 selesai** — Inventory, Kasir POS, dan Invoice aktif. Lihat [PROGRESS.md](PROGRESS.md) untuk status terkini dan [SOUL.md](SOUL.md) untuk aturan kerja pengembangan.
+> Status: **Sprint 3 selesai** — Inventory, Kasir POS, Invoice, dan Purchasing (PO & penerimaan barang) aktif. Lihat [PROGRESS.md](PROGRESS.md) untuk status terkini dan [SOUL.md](SOUL.md) untuk aturan kerja pengembangan.
 
 ---
 
@@ -36,7 +36,7 @@ Satu sistem terpadu yang menghubungkan transaksi harian toko dengan stok, pembuk
 | **Core** | ✅ Selesai | Peran & hak akses, audit log, penomoran dokumen, pengaturan toko |
 | **Inventory** | ✅ Selesai | Barang, satuan & konversi, harga bertingkat, multi-gudang, kartu stok, stock opname, impor CSV |
 | **Sales & POS** | ✅ Selesai | Pelanggan, supplier, shift kasir, terminal POS frontend, invoice resmi & nota non-resmi, pembayaran multi-metode |
-| Purchasing | 🔲 Sprint 3 | Supplier, PO, penerimaan barang, hutang usaha |
+| **Purchasing** | ✅ Selesai (Sprint 3) | PO (draft → disetujui → diterima/batal), penerimaan barang (sebagian/penuh, tolak over-receipt), hutang usaha tercatat; pembayaran hutang di Sprint 4 |
 | Accounting | 🔲 Sprint 4 | Bagan akun, jurnal otomatis dan manual, kas & bank, laporan keuangan |
 | HR | 🔲 Sprint 5 | Profil karyawan, dokumen, riwayat jabatan dan gaji |
 | Attendance | 🔲 Sprint 5 | Absen HP/QR, shift, izin, cuti, rekap bulanan |
@@ -79,7 +79,8 @@ sagara-baja-suite/
 ├── core/                   # Bootstrap, Migrator, Roles, AuditLog, DocumentSequence, Settings
 ├── modules/
 │   ├── inventory/          # ProductRepository, StockService, StockOpnameService, CsvImport, Seeders
-│   └── sales/              # CustomerRepository, SupplierRepository, ShiftService, SaleService, PdfInvoiceService, PosFrontend
+│   ├── sales/              # CustomerRepository, SupplierRepository, ShiftService, SaleService, PdfInvoiceService, PosFrontend
+│   └── purchasing/         # PurchaseOrderService, GoodsReceiptService (tanpa admin UI di Sprint 3)
 ├── assets/
 ├── database/               # SQL dump siap pakai
 └── tests/                  # Unit test mandiri (tanpa PHPUnit)
@@ -115,7 +116,7 @@ Konsep dan alur dipelajari dari proyek open source berikut. Kode tidak disalin.
 - Seluruh aturan kerja dan standar mutu ada di [SOUL.md](SOUL.md). Wajib dibaca sebelum mengubah kode.
 - Branch: `main` (stabil, selalu lulus test), `develop` (aktif).
 - Commit: `tipe(modul): ringkasan`, misalnya `feat(inventory): tambah konversi satuan`.
-- Jalankan `php tests/run.php` sebelum setiap commit — harus exit 0.
+- Jalankan `php -d zend.assertions=1 -d assert.exception=1 tests/run.php` sebelum setiap commit — harus exit 0. (Tanpa flag itu, `php tests/run.php` menolak jalan: assert() tidak aktif di php.ini production dan hasil "lulus" akan palsu.)
 - Setiap perubahan perilaku disertai tes dan pembaruan [PROGRESS.md](PROGRESS.md).
 
 ---

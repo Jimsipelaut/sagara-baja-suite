@@ -1,7 +1,7 @@
 # PROGRESS
 
-Terakhir diperbarui: 2026-11-24
-Fase saat ini: **Perencanaan / SRS**
+Terakhir diperbarui: 2026-11-25
+Fase saat ini: **Sprint 3 selesai (Purchasing) — Sprint 4 berikutnya**
 
 Legenda: `[x]` selesai, `[~]` sedang dikerjakan, `[ ]` belum mulai, `[!]` terblokir
 
@@ -13,7 +13,7 @@ Legenda: `[x]` selesai, `[~]` sedang dikerjakan, `[ ]` belum mulai, `[!]` terblo
 |---|---|
 | SRS v0.1 | Selesai (draft, menunggu jawaban klien) |
 | Desain arsitektur gabungan | Selesai (usulan) |
-| Kode | Sprint 0 (Core) & Sprint 1 (Inventory) Selesai |
+| Kode | Sprint 0 (Core), Sprint 1 (Inventory), Sprint 2 (Sales/POS) & Sprint 3 (Purchasing) Selesai |
 | Klien: jawaban pertanyaan terbuka | Menunggu |
 
 ## 2. Rencana Sprint
@@ -41,8 +41,10 @@ Legenda: `[x]` selesai, `[~]` sedang dikerjakan, `[ ]` belum mulai, `[!]` terblo
 - [x] Pembayaran tunai/transfer/tempo, alokasi pembayaran, dan tracking status lunas/sebagian
 
 ### Sprint 3 - Pembelian, hutang, piutang
-- [ ] PO dan penerimaan barang
-- [ ] Hutang usaha dan piutang (umur piutang)
+- [x] PO dan penerimaan barang
+- [x] Hutang usaha dasar tercatat (grand_total − paid_amount; paid_amount tetap 0)
+- [ ] Pembayaran hutang usaha (pindah ke Sprint 4 — Accounting)
+- [ ] Piutang (umur piutang)
 
 ### Sprint 4 - Pembukuan
 - [ ] Bagan akun dan jurnal otomatis
@@ -84,6 +86,12 @@ Legenda: `[x]` selesai, `[~]` sedang dikerjakan, `[ ]` belum mulai, `[!]` terblo
 | 2026-11-25 | Status PKP toko diset non-PKP saat ini (PPN 0 Rupiah di skema) | Menyesuaikan status riil toko dengan tetap menyediakan field `tax_amount` di database agar siap saat beralih PKP tanpa migrasi |
 | 2026-11-25 | Format dokumen cetak (Invoice & Nota) menggunakan HTML/CSS Print Responsive murni (Rp0) | Menghindari dependensi library binary eksternal seperti dompdf/mpdf/wkhtmltopdf demi performa ringan dan ketaatan prinsip Rp0 |
 | 2026-11-25 | Pengurangan stok dipicu saat penjualan berubah dari draft ke 'terbit' | Mencegah hold / keranjang belanja mengunci stok fisik yang belum disepakati pembeli |
+| 2026-11-25 | Sprint 3: PO tidak mengubah stok; stok hanya bertambah saat penerimaan barang via StockService | Mencegah stok tercatat sebelum barang benar-benar diterima; satu sumber kebenaran stok tetap kartu stok |
+| 2026-11-25 | Sequence 'purchase_order' (PO-SB/) sudah ada sejak Migration_001 — dipakai langsung; sequence baru 'goods_receipt' (GR-SB/) di-seed di Migration_004 | Nomor PO dan nomor tanda terima tidak boleh berbagi urutan (SOUL 4.4) |
+| 2026-11-25 | Hutang usaha = grand_total − paid_amount, paid_amount tetap 0 di Sprint 3; TIDAK ada pembayaran hutang di Sprint 3 | Pembayaran hutang butuh jurnal/kas — itu Sprint 4 (Accounting). PO hanya mencatat hutang saat barang diterima |
+| 2026-11-25 | Kolom `cancel_reason` ditambahkan ke sb_purchase_orders (tidak ada di spek awal) | Alasan batal wajib diisi (SOUL: koreksi beralasan); tanpa kolom ini alasan tidak punya tempat tersimpan |
+| 2026-11-25 | Admin UI Purchasing TIDAK dibuat di Sprint 3 | SalesAdmin/InventoryAdmin besar dan butuh nonce + capability per aksi; UI setengah jadi dilarang SOUL 3. Service + migrasi + tes adalah deliverable; UI menyusul saat dibutuhkan |
+| 2026-11-25 | Migrator menemukan migrasi lewat glob `core/Database/Migrations/*.php` (urut nama file) — tidak ada daftar migrasi yang diedit | Migration_004 terdaftar otomatis karena namanya urut setelah Migration_003 |
 
 ## 4. Pertanyaan Terbuka (menunggu klien)
 
@@ -107,8 +115,19 @@ Legenda: `[x]` selesai, `[~]` sedang dikerjakan, `[ ]` belum mulai, `[!]` terblo
 | Data gaji bocor | Pelanggaran privasi | Capability ketat, tanpa endpoint publik, uji akses |
 | Scope creep | Jadwal molor | Perubahan lewat log keputusan dan persetujuan Owner |
 | Hosting lemah | Kasir lambat | Spesifikasi minimum, cache, uji beban 10.000 SKU |
+| Transaksi bersarang (NumberingService & StockService masing-masing COMMIT sendiri) | Di MySQL nyata, COMMIT di dalam service yang dipanggil dari transaksi luar bersifat progresif — gagal di akhir penerimaan tidak membatalkan mutasi stok awal | Seluruh validasi (status, over-receipt, duplikat baris) dilakukan SEBELUM mutasi pertama; penerimaan juga mengunci baris PO (FOR UPDATE) dan memvalidasi ulang di dalam transaksi. Pola ini diwarisi dari SaleService::publish yang sudah ada — perbaikan menyeluruh (transaksi bersarang yang benar) butuh refactor StockService/NumberingService, di luar Sprint 3 |
+| assert() mati di php.ini production | `php tests/run.php` tampil "SEMUA LULUS" padahal assert() tidak dieksekusi sama sekali (zend.assertions=-1 di VM ini) | tests/run.php kini BERHENTI (exit 2) bila assert() tidak aktif dan memberi tahu perintah yang benar: `php -d zend.assertions=1 -d assert.exception=1 tests/run.php`. Risiko ini berlaku juga untuk suite lama, bukan hanya Sprint 3 |
 
 ## 6. Changelog
+
+### 0.4.0-purchasing (2026-11-25)
+- Migrasi database `Migration_004_Purchasing` membuat 4 tabel: `sb_purchase_orders`, `sb_purchase_items`, `sb_goods_receipts`, `sb_goods_receipt_items`; men-seed sequence `goods_receipt` (GR-SB/). Sequence `purchase_order` (PO-SB/) sudah ada sejak Migration_001.
+- `PurchaseOrderService`: buat draft PO (total dihitung server, pajak 0 non-PKP), setujui (draft → disetujui), batalkan (draft/disetujui saja, alasan wajib, tidak bisa setelah ada penerimaan), `find`/`getItems`/`getReceipts`, `getPayableAmount` (= grand_total − paid_amount). PO tidak mengubah stok.
+- `GoodsReceiptService`: terima barang hanya untuk PO disetujui/diterima_sebagian; tolak over-receipt (kumulatif ≤ qty_ordered), duplikat baris, dan qty ≤ 0; stok bertambah tepat satu kali per tanda terima lewat `StockService->add_stock` (ref_type `goods_receipt`); status PO menjadi `diterima_sebagian` atau `diterima` bila semua baris penuh; baris PO dikunci `FOR UPDATE` dan divalidasi ulang di dalam transaksi.
+- Hutang usaha tercatat saat penerimaan (grand_total − paid_amount, paid_amount tetap 0). Pembayaran hutang TIDAK dibangun — Sprint 4.
+- Admin UI Purchasing tidak dibangun (dicatat sebagai belum dikerjakan, bukan setengah jadi).
+- Unit Test suite Purchasing lengkap (24 test: 14 PurchaseOrder + 10 GoodsReceipt) lulus 100% bersama seluruh suite lama, dijalankan dengan assert() aktif: `php -d zend.assertions=1 -d assert.exception=1 tests/run.php` (exit 0).
+- Perbaikan harness: `tests/run.php` kini menolak jalan bila `zend.assertions` tidak aktif (sebelumnya `php tests/run.php` di VM ini tampil lulus padahal assert() tidak dieksekusi — zend.assertions=-1). Mock `MockWPDB` diperluas: tabel + sequence Purchasing dan handler `get_results` untuk baris PO, tanda terima, dan baris tanda terima.
 
 ### 0.3.0-sales (2026-11-25)
 - Migrasi database `Migration_003_Sales` membuat 6 tabel: `sb_customers`, `sb_suppliers`, `sb_cashier_shifts`, `sb_sales`, `sb_sale_items`, `sb_payments`.
