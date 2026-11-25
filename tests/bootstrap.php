@@ -181,6 +181,12 @@ class MockWPDB extends wpdb {
             'wp_sb_stock_opnames' => [],
             'wp_sb_stock_opname_items' => [],
             'wp_sb_audit_logs' => [],
+            'wp_sb_customers' => [],
+            'wp_sb_suppliers' => [],
+            'wp_sb_cashier_shifts' => [],
+            'wp_sb_sales' => [],
+            'wp_sb_sale_items' => [],
+            'wp_sb_payments' => [],
         ];
         $this->sequences =& $this->tables['wp_sb_document_sequences'];
         $this->insert_id = 10;
@@ -209,8 +215,12 @@ class MockWPDB extends wpdb {
     }
 
     public function insert( string $table, array $data, ?array $format = null ): int|false {
-        $this->insert_id++;
-        $data['id'] = $this->insert_id;
+        if ( isset( $data['id'] ) ) {
+            $this->insert_id = max( $this->insert_id, (int) $data['id'] );
+        } else {
+            $this->insert_id++;
+            $data['id'] = $this->insert_id;
+        }
         if ( ! isset( $this->tables[ $table ] ) ) {
             $this->tables[ $table ] = [];
         }
@@ -299,6 +309,26 @@ class MockWPDB extends wpdb {
             return $row ? ( $output === 'ARRAY_A' ? $row : (object) $row ) : null;
         }
 
+        // Generic lookup by ID: sb_customers, sb_suppliers, sb_cashier_shifts, sb_sales
+        if ( preg_match( "/FROM [`]?wp_(sb_[a-z_]+)[`]?.*WHERE.*(?:id|\.id) = (\d+)/is", $query, $m ) ) {
+            $tbl = 'wp_' . $m[1];
+            $id  = (int) $m[2];
+            $row = $this->tables[ $tbl ][ $id ] ?? null;
+            return $row ? ( $output === 'ARRAY_A' ? $row : (object) $row ) : null;
+        }
+
+        // Shift by cashier_user_id and warehouse_id
+        if ( preg_match( "/FROM [`]?wp_sb_cashier_shifts[`]?.*WHERE cashier_user_id = (\d+) AND warehouse_id = (\d+)/is", $query, $m ) ) {
+            $cid = (int) $m[1];
+            $wid = (int) $m[2];
+            foreach ( $this->tables['wp_sb_cashier_shifts'] as $row ) {
+                if ( (int) $row['cashier_user_id'] === $cid && (int) $row['warehouse_id'] === $wid && ( $row['status'] ?? '' ) === 'open' ) {
+                    return $output === 'ARRAY_A' ? $row : (object) $row;
+                }
+            }
+            return null;
+        }
+
         return null;
     }
 
@@ -311,15 +341,49 @@ class MockWPDB extends wpdb {
         }
 
         // Product base_unit_id
-        if ( preg_match( "/SELECT base_unit_id FROM `wp_sb_products` WHERE id = (\d+)/i", $query, $m ) ) {
+        if ( preg_match( "/SELECT base_unit_id FROM [`]?wp_sb_products[`]? WHERE id = (\d+)/i", $query, $m ) ) {
             $id = (int) $m[1];
+            foreach ( $this->tables['wp_sb_products'] as $p ) {
+                if ( (int) ( $p['id'] ?? 0 ) === $id ) {
+                    return $p['base_unit_id'] ?? null;
+                }
+            }
             return $this->tables['wp_sb_products'][ $id ]['base_unit_id'] ?? null;
         }
 
         // Product SKU
-        if ( preg_match( "/SELECT sku FROM `wp_sb_products` WHERE id = (\d+)/i", $query, $m ) ) {
+        if ( preg_match( "/SELECT sku FROM [`]?wp_sb_products[`]? WHERE id = (\d+)/i", $query, $m ) ) {
             $id = (int) $m[1];
+            foreach ( $this->tables['wp_sb_products'] as $p ) {
+                if ( (int) ( $p['id'] ?? 0 ) === $id ) {
+                    return $p['sku'] ?? null;
+                }
+            }
             return $this->tables['wp_sb_products'][ $id ]['sku'] ?? null;
+        }
+
+        // Customer / Supplier code uniqueness check
+        if ( preg_match( "/SELECT id FROM [`]?wp_(sb_[a-z_]+)[`]? WHERE code = '([^']+)'/is", $query, $m ) ) {
+            $tbl  = 'wp_' . $m[1];
+            $code = $m[2];
+            foreach ( $this->tables[ $tbl ] ?? [] as $row ) {
+                if ( ( $row['code'] ?? '' ) === $code ) {
+                    return $row['id'];
+                }
+            }
+            return null;
+        }
+
+        // Shift open uniqueness check
+        if ( preg_match( "/SELECT id FROM [`]?wp_sb_cashier_shifts[`]?.*cashier_user_id = (\d+) AND warehouse_id = (\d+) AND status = 'open'/is", $query, $m ) ) {
+            $cid = (int) $m[1];
+            $wid = (int) $m[2];
+            foreach ( $this->tables['wp_sb_cashier_shifts'] as $row ) {
+                if ( (int) $row['cashier_user_id'] === $cid && (int) $row['warehouse_id'] === $wid && ( $row['status'] ?? '' ) === 'open' ) {
+                    return $row['id'];
+                }
+            }
+            return null;
         }
 
         // Unit ID by code
@@ -420,6 +484,30 @@ class MockWPDB extends wpdb {
                 }
             }
             return $items;
+        }
+
+        // Sale Items
+        if ( preg_match( "/FROM [`]?wp_sb_sale_items[`]? WHERE sale_id = (\d+)/i", $query, $m ) ) {
+            $sid = (int) $m[1];
+            $items = [];
+            foreach ( $this->tables['wp_sb_sale_items'] as $item ) {
+                if ( (int) $item['sale_id'] === $sid ) {
+                    $items[] = $output === 'ARRAY_A' ? $item : (object) $item;
+                }
+            }
+            return $items;
+        }
+
+        // Payments
+        if ( preg_match( "/FROM [`]?wp_sb_payments[`]? WHERE sale_id = (\d+)/i", $query, $m ) ) {
+            $sid = (int) $m[1];
+            $payments = [];
+            foreach ( $this->tables['wp_sb_payments'] as $p ) {
+                if ( (int) $p['sale_id'] === $sid ) {
+                    $payments[] = $output === 'ARRAY_A' ? $p : (object) $p;
+                }
+            }
+            return $payments;
         }
 
         // All Products

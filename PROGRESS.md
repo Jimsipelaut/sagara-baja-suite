@@ -33,11 +33,11 @@ Legenda: `[x]` selesai, `[~]` sedang dikerjakan, `[ ]` belum mulai, `[!]` terblo
 - [x] Stock opname dengan persetujuan
 
 ### Sprint 2 - Sales, POS, Invoice
-- [ ] Pelanggan dan supplier
-- [ ] Penjualan dan retur
-- [ ] Layar kasir, shift kasir, hold, struk
-- [ ] Invoice resmi dan non-resmi, PDF
-- [ ] Pembayaran dan alokasi ke invoice
+- [x] Pelanggan dan supplier
+- [x] Penjualan dan pembatalan (void) dengan pembalikan mutasi stok otomatis
+- [x] Layar kasir (POS), shift kasir buka/tutup, modal awal & akhir
+- [x] Invoice resmi dan nota non-resmi, cetak thermal struk & PDF browser-ready (Rp0)
+- [x] Pembayaran tunai/transfer/tempo, alokasi pembayaran, dan tracking status lunas/sebagian
 
 ### Sprint 3 - Pembelian, hutang, piutang
 - [ ] PO dan penerimaan barang
@@ -80,17 +80,20 @@ Legenda: `[x]` selesai, `[~]` sedang dikerjakan, `[ ]` belum mulai, `[!]` terblo
 | 2026-11-24 | Data dummy material bangunan toko besi & baja (8 SKU representatif) | Permintaan owner menggunakan dummy data dulu untuk kategori material besi, baja ringan, semen, pasir, spandek, triplek |
 | 2026-11-24 | Harga bertingkat (eceran, grosir, proyek) dan modal disimpan integer murni | Memenuhi aturan SOUL.md: tidak menggunakan float untuk nilai moneter |
 | 2026-11-24 | Row lock `FOR UPDATE` dan penolakan stok minus default pada mutasi stok | Memastikan integritas saldo fisik vs kartu stok (`sb_stock_moves`) dan mencegah race condition saat multi-kasir |
+| 2026-11-25 | Status PKP toko diset non-PKP saat ini (PPN 0 Rupiah di skema) | Menyesuaikan status riil toko dengan tetap menyediakan field `tax_amount` di database agar siap saat beralih PKP tanpa migrasi |
+| 2026-11-25 | Format dokumen cetak (Invoice & Nota) menggunakan HTML/CSS Print Responsive murni (Rp0) | Menghindari dependensi library binary eksternal seperti dompdf/mpdf/wkhtmltopdf demi performa ringan dan ketaatan prinsip Rp0 |
+| 2026-11-25 | Pengurangan stok dipicu saat penjualan berubah dari draft ke 'terbit' | Mencegah hold / keranjang belanja mengunci stok fisik yang belum disepakati pembeli |
 
 ## 4. Pertanyaan Terbuka (menunggu klien)
 
-- [ ] Status PKP dan perlakuan PPN?
-- [ ] Definisi pasti invoice non-resmi dan siapa pemakainya?
+- [x] Status PKP dan perlakuan PPN? → **Bukan PKP untuk sekarang. Kolom tax_amount disiapkan di skema tapi diisi 0. Dapat diaktifkan nanti tanpa migrasi ulang.**
+- [x] Definisi pasti invoice non-resmi dan siapa pemakainya? → **Keduanya: struk kasir tunai tanpa nama pelanggan, dan nota ke pelanggan langganan yang tidak minta invoice resmi.**
+- [x] Perlu mode offline di kasir? → **Tidak. Kasir selalu online.**
 - [ ] Jumlah SKU, karyawan, transaksi per hari, gudang?
 - [ ] Metode stok: rata-rata atau FIFO?
 - [ ] Skema gaji (bulanan, mingguan, harian), aturan lembur, BPJS, PPh 21?
 - [ ] Cara absensi: HP, QR, atau mesin fingerprint?
 - [ ] Jumlah kasir dan perangkat (printer thermal, scanner)?
-- [ ] Perlu mode offline di kasir?
 - [ ] Hosting dan anggaran, target go-live?
 
 ## 5. Risiko
@@ -105,6 +108,16 @@ Legenda: `[x]` selesai, `[~]` sedang dikerjakan, `[ ]` belum mulai, `[!]` terblo
 | Hosting lemah | Kasir lambat | Spesifikasi minimum, cache, uji beban 10.000 SKU |
 
 ## 6. Changelog
+
+### 0.3.0-sales (2026-11-25)
+- Migrasi database `Migration_003_Sales` membuat 6 tabel: `sb_customers`, `sb_suppliers`, `sb_cashier_shifts`, `sb_sales`, `sb_sale_items`, `sb_payments`.
+- `CustomerRepository`: CRUD master pelanggan, limit kredit, validasi kode unik, dan pelacakan saldo piutang.
+- `SupplierRepository`: CRUD master supplier material bangunan dengan kontak dan syarat pembayaran.
+- `ShiftService`: Alur shift kasir POS dari buka shift dengan modal awal tunai, pencatatan transaksi terikat shift, hingga tutup shift dengan rekap uang fisik.
+- `SaleService`: Mesin transaksi penjualan dari draft keranjang, penerbitan invoice dengan mutasi stok atomik `deduct_stock` dan rekonsiliasi kartu stok seimbang, multi-metode pembayaran (tunai, transfer, tempo) dengan update otomatis status `lunas`/`sebagian`, dan fungsi pembatalan (`void`) dengan pembalikan stok otomatis `add_stock`.
+- `PdfInvoiceService`: Engine pencetakan dokumen nota non-resmi (kasir & langganan) dan invoice resmi A4 dengan format siap cetak printer thermal 80mm dan browser PDF (Rp0 eksternal library).
+- `SalesAdmin`: Antarmuka admin WordPress terpadu untuk Terminal Kasir (POS), Riwayat Penjualan, Master Pelanggan, Master Supplier, dan Shift Kasir.
+- Unit Test suite Sales lengkap (CustomerRepository, SupplierRepository, ShiftService, SaleService, PdfInvoiceService) lulus 100% (total 49 assertions di 14 suite pengujian).
 
 ### 0.2.0-inventory (2026-11-24)
 - Migrasi database `Migration_002_Inventory` membuat 9 tabel: `sb_categories`, `sb_units`, `sb_warehouses`, `sb_products`, `sb_unit_conversions`, `sb_stock_balances`, `sb_stock_moves`, `sb_stock_opnames`, `sb_stock_opname_items`.

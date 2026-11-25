@@ -6,6 +6,7 @@ use SagaraBaja\Core\Database\Migrator;
 use SagaraBaja\Core\Admin\AdminMenu;
 use SagaraBaja\Core\Audit\AuditLogger;
 use SagaraBaja\Modules\Inventory\Admin\InventoryAdmin;
+use SagaraBaja\Modules\Sales\Admin\SalesAdmin;
 
 if ( ! defined( 'ABSPATH' ) && ! defined( 'SB_TEST_SUITE' ) ) {
     exit;
@@ -36,6 +37,7 @@ class Plugin {
         if ( is_admin() ) {
             AdminMenu::register();
             InventoryAdmin::register();
+            SalesAdmin::register();
         }
 
         // Jalankan hook modul-modul

@@ -15,6 +15,9 @@ require_once __DIR__ . '/Inventory/ProductRepositoryTest.php';
 require_once __DIR__ . '/Inventory/StockOpnameTest.php';
 require_once __DIR__ . '/Inventory/DummyDataSeederTest.php';
 
+// Sprint 2 Sales Test Suites
+require_once __DIR__ . '/Sales/SalesTest.php';
+
 echo "=== Menjalankan Test Suite Sagara Baja Suite ===\n\n";
 
 $tests = [
@@ -27,6 +30,11 @@ $tests = [
     'ProductRepository'    => new \SagaraBaja\Tests\Inventory\ProductRepositoryTest(),
     'StockOpname'          => new \SagaraBaja\Tests\Inventory\StockOpnameTest(),
     'DummyDataSeeder'      => new \SagaraBaja\Tests\Inventory\DummyDataSeederTest(),
+    'CustomerRepository'   => new \SagaraBaja\Tests\Sales\CustomerRepositoryTest(),
+    'SupplierRepository'   => new \SagaraBaja\Tests\Sales\SupplierRepositoryTest(),
+    'ShiftService'         => new \SagaraBaja\Tests\Sales\ShiftServiceTest(),
+    'SaleService'          => new \SagaraBaja\Tests\Sales\SaleServiceTest(),
+    'PdfInvoiceService'    => new \SagaraBaja\Tests\Sales\PdfInvoiceServiceTest(),
 ];
 
 $failed = 0;
