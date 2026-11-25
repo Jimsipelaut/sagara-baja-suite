@@ -271,7 +271,7 @@ class PosFrontend {
 		$products = $wpdb->get_results(
 			$wpdb->prepare(
 				"SELECT p.id, p.sku, p.name, p.category_id, p.base_unit_id,
-				        p.buy_price, p.sell_price_retail, p.sell_price_wholesale, p.sell_price_project,
+				        p.cost_price, p.sell_price_retail, p.sell_price_wholesale, p.sell_price_project,
 				        u.name as unit_name,
 				        c.name as category_name,
 				        COALESCE(b.qty, 0) as stock_qty
