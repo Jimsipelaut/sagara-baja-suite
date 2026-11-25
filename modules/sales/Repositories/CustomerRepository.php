@@ -70,6 +70,17 @@ class CustomerRepository {
 	}
 
 	/**
+	 * Ambil pelanggan berdasarkan Kode. Null jika tidak ditemukan.
+	 */
+	public function findByCode( string $code ): ?array {
+		$row = $this->wpdb->get_row(
+			$this->wpdb->prepare( "SELECT * FROM {$this->table} WHERE code = %s", $code ),
+			ARRAY_A
+		);
+		return $row ?: null;
+	}
+
+	/**
 	 * Daftar pelanggan aktif, bisa disaring nama/kode.
 	 *
 	 * @return array[]

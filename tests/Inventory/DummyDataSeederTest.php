@@ -20,7 +20,7 @@ class DummyDataSeederTest {
         $result = $seeder->run();
 
         assert( $result['status'] === 'success', "Seeder harus berhasil." );
-        assert( count( $result['products'] ) === 8, "Harus men-seed 8 jenis barang dummy material. Didapat: " . count( $result['products'] ) );
+        assert( count( $result['products'] ) === 30, "Harus men-seed 30 jenis barang dummy material. Didapat: " . count( $result['products'] ) );
 
         $repo = new ProductRepository();
         $besi8 = $repo->find_by_sku( 'SB-BESI-08' );

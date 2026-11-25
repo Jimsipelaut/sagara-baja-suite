@@ -282,6 +282,17 @@ class StockService {
     }
 
     /**
+     * Dapatkan saldo stok saat ini untuk produk dan gudang tertentu.
+     */
+    public function get_balance( int $product_id, int $warehouse_id ): float {
+        $qty = $this->wpdb->get_var( $this->wpdb->prepare(
+            "SELECT qty FROM `{$this->table_balances}` WHERE product_id = %d AND warehouse_id = %d",
+            $product_id, $warehouse_id
+        ) );
+        return $qty !== null ? (float) $qty : 0.0;
+    }
+
+    /**
      * Kunci baris saldo dengan SELECT ... FOR UPDATE.
      */
     private function lock_balance( int $product_id, int $warehouse_id ): float {

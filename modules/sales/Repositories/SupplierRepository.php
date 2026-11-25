@@ -63,6 +63,14 @@ class SupplierRepository {
 		return $row ?: null;
 	}
 
+	public function findByCode( string $code ): ?array {
+		$row = $this->wpdb->get_row(
+			$this->wpdb->prepare( "SELECT * FROM {$this->table} WHERE code = %s", $code ),
+			ARRAY_A
+		);
+		return $row ?: null;
+	}
+
 	public function list( string $search = '', int $limit = 50, int $offset = 0 ): array {
 		if ( $search !== '' ) {
 			$like = '%' . $this->wpdb->esc_like( $search ) . '%';
