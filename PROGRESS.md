@@ -1,6 +1,6 @@
 # PROGRESS
 
-Terakhir diperbarui: 2026-11-25
+Terakhir diperbarui: 2026-11-26
 Fase saat ini: **Sprint 3 selesai (Purchasing) — Sprint 4 berikutnya**
 
 Legenda: `[x]` selesai, `[~]` sedang dikerjakan, `[ ]` belum mulai, `[!]` terblokir
@@ -44,7 +44,7 @@ Legenda: `[x]` selesai, `[~]` sedang dikerjakan, `[ ]` belum mulai, `[!]` terblo
 - [x] PO dan penerimaan barang
 - [x] Hutang usaha dasar tercatat (grand_total − paid_amount; paid_amount tetap 0)
 - [ ] Pembayaran hutang usaha (pindah ke Sprint 4 — Accounting)
-- [ ] Piutang (umur piutang)
+- [x] Piutang (umur piutang) — laporan umur piutang (ReceivablesAgingService + 5 tes)
 
 ### Sprint 4 - Pembukuan
 - [ ] Bagan akun dan jurnal otomatis
