@@ -271,7 +271,7 @@ class PosFrontend {
 		$products = $wpdb->get_results(
 			$wpdb->prepare(
 				"SELECT p.id, p.sku, p.name, p.category_id, p.base_unit_id,
-				        p.buy_price, p.sell_price_retail, p.sell_price_wholesale, p.sell_price_project,
+				        p.cost_price, p.sell_price_retail, p.sell_price_wholesale, p.sell_price_project,
 				        u.name as unit_name,
 				        c.name as category_name,
 				        COALESCE(b.qty, 0) as stock_qty
@@ -764,7 +764,7 @@ class PosFrontend {
 				}))
 			};
 
-			fetch(ajaxUrl, {
+			fetch(ajaxUrl + '?action=sb_pos_checkout', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify(payload)
@@ -774,11 +774,11 @@ class PosFrontend {
 				btn.disabled = false;
 				txt.textContent = 'BAYAR & CETAK STRUK';
 
-				if (res.success) {
+				if (res && res.success) {
 					// Cetak struk otomatis
 					printReceipt(res.data.sale_id);
 
-					alert('✅ Transaksi Berhasil Terbit!\nNo. Dokumen: ' + res.data.doc_number + '\nTotal: Rp ' + res.data.grand_total.toLocaleString('id-ID'));
+					alert('✅ Transaksi Berhasil Terbit!\nNo. Dokumen: ' + res.data.doc_number + '\nTotal: Rp ' + Number(res.data.grand_total).toLocaleString('id-ID'));
 
 					// Reset Keranjang
 					cart = [];
@@ -786,7 +786,7 @@ class PosFrontend {
 					document.getElementById('inp-cash-paid').value = '';
 					renderCart();
 				} else {
-					alert('❌ Transaksi Gagal: ' + (res.data?.message || 'Terjadi kesalahan sistem.'));
+					alert('❌ Transaksi Gagal: ' + (res?.data?.message || 'Terjadi kesalahan sistem.'));
 				}
 			})
 			.catch(err => {
@@ -887,6 +887,12 @@ class PosFrontend {
 	public static function ajaxCheckout(): void {
 		$raw  = file_get_contents( 'php://input' );
 		$data = json_decode( $raw, true );
+		if ( ! $data && ! empty( $_POST ) ) {
+			$data = $_POST;
+			if ( isset( $data['items'] ) && is_string( $data['items'] ) ) {
+				$data['items'] = json_decode( stripslashes( $data['items'] ), true );
+			}
+		}
 
 		if ( ! $data || ! wp_verify_nonce( $data['_nonce'] ?? '', 'sb_pos_checkout_nonce' ) ) {
 			wp_send_json_error( [ 'message' => 'Token keamanan (nonce) tidak valid.' ] );
@@ -922,18 +928,31 @@ class PosFrontend {
 			// 2. Terbitkan (Atomik Potong Stok Fisik)
 			$sales->publish( $sale_id );
 
+			$sale = $sales->find( $sale_id );
+
 			// 3. Catat Pembayaran jika ada nominal
 			$paid_amount = (int) ( $data['paid_amount'] ?? 0 );
 			if ( $paid_amount > 0 ) {
-				$sales->addPayment( $sale_id, [
-					'method'     => $data['payment_method'] ?? 'tunai',
-					'amount'     => $paid_amount,
-					'created_by' => $user_id,
-					'notes'      => 'Pembayaran Kasir POS',
-				] );
-			}
+				$method = $data['payment_method'] ?? 'tunai';
+				// Untuk tunai, uang masuk penjualan maksimal sebesar grand_total jika bayar berlebih (ada kembalian)
+				$applied_amount = ( $method === 'tunai' && $paid_amount > (int) $sale['grand_total'] )
+					? (int) $sale['grand_total']
+					: $paid_amount;
 
-			$sale = $sales->find( $sale_id );
+				$notes = 'Pembayaran Kasir POS';
+				if ( $method === 'tunai' && $paid_amount > (int) $sale['grand_total'] ) {
+					$notes .= ' (Diterima: Rp ' . number_format( $paid_amount, 0, ',', '.' ) . ', Kembali: Rp ' . number_format( $paid_amount - (int) $sale['grand_total'], 0, ',', '.' ) . ')';
+				}
+
+				$sales->addPayment( $sale_id, [
+					'method'     => $method,
+					'amount'     => $applied_amount,
+					'created_by' => $user_id,
+					'notes'      => $notes,
+				] );
+
+				$sale = $sales->find( $sale_id );
+			}
 
 			wp_send_json_success( [
 				'sale_id'     => $sale_id,

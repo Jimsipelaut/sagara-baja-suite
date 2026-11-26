@@ -170,6 +170,27 @@ class MockWPDB extends wpdb {
                     'last_period' => null,
                     'updated_at' => '2026-01-01 00:00:00',
                 ],
+                // Sesuai seed Migration_001 (purchase_order) dan Migration_004 (goods_receipt).
+                'purchase_order' => [
+                    'id' => 4,
+                    'doc_type' => 'purchase_order',
+                    'prefix' => 'PO-SB/',
+                    'current_number' => 0,
+                    'pad_length' => 5,
+                    'reset_period' => 'yearly',
+                    'last_period' => null,
+                    'updated_at' => '2026-01-01 00:00:00',
+                ],
+                'goods_receipt' => [
+                    'id' => 5,
+                    'doc_type' => 'goods_receipt',
+                    'prefix' => 'GR-SB/',
+                    'current_number' => 0,
+                    'pad_length' => 5,
+                    'reset_period' => 'yearly',
+                    'last_period' => null,
+                    'updated_at' => '2026-01-01 00:00:00',
+                ],
             ],
             'wp_sb_categories' => [],
             'wp_sb_units' => [],
@@ -187,6 +208,10 @@ class MockWPDB extends wpdb {
             'wp_sb_sales' => [],
             'wp_sb_sale_items' => [],
             'wp_sb_payments' => [],
+            'wp_sb_purchase_orders' => [],
+            'wp_sb_purchase_items' => [],
+            'wp_sb_goods_receipts' => [],
+            'wp_sb_goods_receipt_items' => [],
         ];
         $this->sequences =& $this->tables['wp_sb_document_sequences'];
         $this->insert_id = 10;
@@ -492,6 +517,50 @@ class MockWPDB extends wpdb {
             $items = [];
             foreach ( $this->tables['wp_sb_sale_items'] as $item ) {
                 if ( (int) $item['sale_id'] === $sid ) {
+                    $items[] = $output === 'ARRAY_A' ? $item : (object) $item;
+                }
+            }
+            return $items;
+        }
+
+        // Purchase Order Items (JOIN produk & satuan, seperti SaleService::getItems)
+        if ( preg_match( "/FROM [`]?wp_sb_purchase_items[`]? i\b.*?WHERE i\.po_id = (\d+)/is", $query, $m ) ) {
+            $pid = (int) $m[1];
+            $items = [];
+            foreach ( $this->tables['wp_sb_purchase_items'] as $item ) {
+                if ( (int) $item['po_id'] === $pid ) {
+                    $p = $this->tables['wp_sb_products'][ $item['product_id'] ] ?? [];
+                    $u = $this->tables['wp_sb_units'][ $item['unit_id'] ] ?? [];
+                    $item['product_name'] = $p['name'] ?? null;
+                    $item['product_sku']  = $p['sku'] ?? null;
+                    $item['unit_name']    = $u['name'] ?? null;
+                    $items[] = $output === 'ARRAY_A' ? $item : (object) $item;
+                }
+            }
+            return $items;
+        }
+
+        // Goods Receipts by PO
+        if ( preg_match( "/FROM [`]?wp_sb_goods_receipts[`]? WHERE po_id = (\d+)/i", $query, $m ) ) {
+            $pid = (int) $m[1];
+            $receipts = [];
+            foreach ( $this->tables['wp_sb_goods_receipts'] as $r ) {
+                if ( (int) $r['po_id'] === $pid ) {
+                    $receipts[] = $output === 'ARRAY_A' ? $r : (object) $r;
+                }
+            }
+            return $receipts;
+        }
+
+        // Goods Receipt Items (JOIN produk)
+        if ( preg_match( "/FROM [`]?wp_sb_goods_receipt_items[`]? i\b.*?WHERE i\.receipt_id = (\d+)/is", $query, $m ) ) {
+            $rid = (int) $m[1];
+            $items = [];
+            foreach ( $this->tables['wp_sb_goods_receipt_items'] as $item ) {
+                if ( (int) $item['receipt_id'] === $rid ) {
+                    $p = $this->tables['wp_sb_products'][ $item['product_id'] ] ?? [];
+                    $item['product_name'] = $p['name'] ?? null;
+                    $item['product_sku']  = $p['sku'] ?? null;
                     $items[] = $output === 'ARRAY_A' ? $item : (object) $item;
                 }
             }
