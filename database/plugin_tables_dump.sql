@@ -167,7 +167,7 @@ CREATE TABLE `wp_sb_document_sequences` (
   `updated_at` datetime NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_doc_type` (`doc_type`)
-) ENGINE=InnoDB AUTO_INCREMENT=9 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=11 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -176,8 +176,70 @@ CREATE TABLE `wp_sb_document_sequences` (
 
 LOCK TABLES `wp_sb_document_sequences` WRITE;
 /*!40000 ALTER TABLE `wp_sb_document_sequences` DISABLE KEYS */;
-INSERT INTO `wp_sb_document_sequences` VALUES (1,'invoice_resmi','INV-RES/',2,5,'yearly','2026','2026-11-25 13:40:46'),(2,'nota_non_resmi','NOT-NR/',5,5,'yearly','2026','2026-11-25 13:39:34'),(3,'purchase_order','PO-SB/',0,5,'yearly',NULL,'2026-11-25 03:07:42'),(4,'surat_jalan','SJ-SB/',0,5,'yearly',NULL,'2026-11-25 03:07:42'),(5,'stock_opname','SO-SB/',0,4,'yearly',NULL,'2026-11-25 03:07:42'),(6,'kasbon','KB-SB/',0,4,'yearly',NULL,'2026-11-25 03:07:42'),(8,'stock_transfer','TRF/',0,5,'yearly','2026','0000-00-00 00:00:00');
+INSERT INTO `wp_sb_document_sequences` VALUES (1,'invoice_resmi','INV-RES/',2,5,'yearly','2026','2026-11-25 13:40:46'),(2,'nota_non_resmi','NOT-NR/',5,5,'yearly','2026','2026-11-25 13:39:34'),(3,'purchase_order','PO-SB/',0,5,'yearly',NULL,'2026-11-25 03:07:42'),(4,'surat_jalan','SJ-SB/',0,5,'yearly',NULL,'2026-11-25 03:07:42'),(5,'stock_opname','SO-SB/',0,4,'yearly',NULL,'2026-11-25 03:07:42'),(6,'kasbon','KB-SB/',0,4,'yearly',NULL,'2026-11-25 03:07:42'),(8,'stock_transfer','TRF/',0,5,'yearly','2026','0000-00-00 00:00:00'),(9,'goods_receipt','GR-SB/',0,5,'yearly',NULL,'2026-11-27 02:25:06'),(10,'supplier_payment','BYR-SB/',0,5,'yearly',NULL,'2026-11-27 02:25:06');
 /*!40000 ALTER TABLE `wp_sb_document_sequences` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `wp_sb_goods_receipt_items`
+--
+
+DROP TABLE IF EXISTS `wp_sb_goods_receipt_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `wp_sb_goods_receipt_items` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `receipt_id` bigint unsigned NOT NULL,
+  `po_item_id` bigint unsigned NOT NULL,
+  `product_id` bigint unsigned NOT NULL,
+  `qty_received` decimal(15,4) NOT NULL,
+  `unit_cost` bigint NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_goods_receipt_items_receipt` (`receipt_id`),
+  KEY `idx_goods_receipt_items_po_item` (`po_item_id`),
+  KEY `idx_goods_receipt_items_product` (`product_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `wp_sb_goods_receipt_items`
+--
+
+LOCK TABLES `wp_sb_goods_receipt_items` WRITE;
+/*!40000 ALTER TABLE `wp_sb_goods_receipt_items` DISABLE KEYS */;
+/*!40000 ALTER TABLE `wp_sb_goods_receipt_items` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `wp_sb_goods_receipts`
+--
+
+DROP TABLE IF EXISTS `wp_sb_goods_receipts`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `wp_sb_goods_receipts` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `po_id` bigint unsigned NOT NULL,
+  `receipt_number` varchar(30) COLLATE utf8mb4_unicode_520_ci NOT NULL,
+  `receipt_date` datetime NOT NULL,
+  `warehouse_id` bigint unsigned NOT NULL,
+  `received_by` bigint unsigned NOT NULL,
+  `notes` text COLLATE utf8mb4_unicode_520_ci,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_goods_receipts_number` (`receipt_number`),
+  KEY `idx_goods_receipts_po` (`po_id`),
+  KEY `idx_goods_receipts_date` (`receipt_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `wp_sb_goods_receipts`
+--
+
+LOCK TABLES `wp_sb_goods_receipts` WRITE;
+/*!40000 ALTER TABLE `wp_sb_goods_receipts` DISABLE KEYS */;
+/*!40000 ALTER TABLE `wp_sb_goods_receipts` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --
@@ -251,6 +313,79 @@ LOCK TABLES `wp_sb_products` WRITE;
 /*!40000 ALTER TABLE `wp_sb_products` DISABLE KEYS */;
 INSERT INTO `wp_sb_products` VALUES (1,'SB-BESI-08','899100108001','Besi Beton 8mm Polos SNI (Dummy)',1,1,42000,48000,46000,44500,100.0000,1,'2026-11-25 03:11:46','2026-11-25 03:11:46'),(2,'SB-BESI-10','899100110001','Besi Beton 10mm Ulir SNI (Dummy)',1,1,65000,74000,71000,69000,80.0000,1,'2026-11-25 03:11:46','2026-11-25 03:11:46'),(3,'SB-CNL-C75','899100207501','Kanal C75 Baja Ringan 0.75mm (Dummy)',2,1,72000,82000,79000,76000,50.0000,1,'2026-11-25 03:11:46','2026-11-25 03:11:46'),(4,'SB-RNG-045','899100204501','Reng Baja Ringan 0.45mm (Dummy)',2,1,34000,40000,38000,36500,50.0000,1,'2026-11-25 03:11:46','2026-11-25 03:11:46'),(5,'SB-SMN-TR50','899100305001','Semen Tiga Roda 50kg (Dummy)',3,3,62000,68000,66000,64500,50.0000,1,'2026-11-25 03:11:46','2026-11-25 03:11:46'),(6,'SB-PSR-PSG',NULL,'Pasir Pasang Bangunan Super (Dummy)',3,7,240000,290000,275000,260000,10.0000,1,'2026-11-25 03:11:46','2026-11-25 03:11:46'),(7,'SB-SPD-035','899100403501','Atap Spandek Pasir 0.35mm (Dummy)',2,6,45000,54000,51000,48000,30.0000,1,'2026-11-25 03:11:46','2026-11-25 03:11:46'),(8,'SB-PLW-09MM','899100509001','Triplek Meranti Cor 9mm 122x244 (Dummy)',4,6,85000,98000,94000,90000,20.0000,1,'2026-11-25 03:11:46','2026-11-25 03:11:46'),(9,'SB-BESI-06','899100106001','Besi Beton 6mm Polos SNI (Dummy)',1,1,28000,33000,31000,29500,100.0000,1,'2026-11-25 04:30:21','2026-11-25 04:30:21'),(10,'SB-BESI-12','899100112001','Besi Beton 12mm Ulir SNI (Dummy)',1,1,96000,108000,104000,101000,60.0000,1,'2026-11-25 04:30:21','2026-11-25 04:30:21'),(11,'SB-BESI-16','899100116001','Besi Beton 16mm Ulir SNI (Dummy)',1,1,170000,192000,185000,179000,40.0000,1,'2026-11-25 04:30:21','2026-11-25 04:30:21'),(12,'SB-HLW-2040','899100120401','Besi Hollow Galvanis 20x40 1.2mm 6m (Dummy)',1,1,58000,68000,64000,61000,50.0000,1,'2026-11-25 04:30:21','2026-11-25 04:30:21'),(13,'SB-HLW-4040','899100140401','Besi Hollow Galvanis 40x40 1.4mm 6m (Dummy)',1,1,98000,115000,109000,104000,40.0000,1,'2026-11-25 04:30:21','2026-11-25 04:30:21'),(14,'SB-PIP-150','899100115001','Pipa Besi Galvanis 1.5 Inch Medium (Dummy)',1,1,125000,145000,138000,132000,30.0000,1,'2026-11-25 04:30:21','2026-11-25 04:30:21'),(15,'SB-PLT-3030','899100130301','Plat Strip 3x30mm 6m (Dummy)',1,1,31000,38000,35000,33000,40.0000,1,'2026-11-25 04:30:21','2026-11-25 04:30:21'),(16,'SB-WRM-M06','899100100601','Wiremesh M6 Ulir SNI 2.1x5.4m (Dummy)',1,6,295000,340000,325000,310000,20.0000,1,'2026-11-25 04:30:21','2026-11-25 04:30:21'),(17,'SB-WRM-M08','899100100801','Wiremesh M8 Ulir SNI 2.1x5.4m (Dummy)',1,6,510000,580000,555000,535000,15.0000,1,'2026-11-25 04:30:21','2026-11-25 04:30:21'),(18,'SB-CNL-C65','899100206501','Kanal C75 Baja Ringan 0.65mm (Dummy)',2,1,62000,71000,68000,65000,50.0000,1,'2026-11-25 04:30:22','2026-11-25 04:30:22'),(19,'SB-RNG-040','899100204001','Reng Baja Ringan 0.40mm (Dummy)',2,1,29000,35000,33000,31000,50.0000,1,'2026-11-25 04:30:22','2026-11-25 04:30:22'),(20,'SB-SPD-030','899100403001','Atap Spandek Polos 0.30mm 6m (Dummy)',2,6,36000,43000,40500,38500,30.0000,1,'2026-11-25 04:30:22','2026-11-25 04:30:22'),(21,'SB-GTM-2X4','899100402401','Genteng Metal Pasir 2x4 Daun (Dummy)',2,6,32000,38500,36000,34000,40.0000,1,'2026-11-25 04:30:22','2026-11-25 04:30:22'),(22,'SB-SMN-GS40','899100304001','Semen Gresik 40kg (Dummy)',3,3,49000,54500,52500,51000,50.0000,1,'2026-11-25 04:30:22','2026-11-25 04:30:22'),(23,'SB-MTR-M100','899100310001','Semen Mortar Perekat Hebel 40kg (Dummy)',3,3,63000,72000,69000,66500,40.0000,1,'2026-11-25 04:30:22','2026-11-25 04:30:22'),(24,'SB-HBL-10CM','899100320001','Bata Ringan Hebel 10x20x60cm (Dummy)',3,7,550000,620000,595000,580000,10.0000,1,'2026-11-25 04:30:22','2026-11-25 04:30:22'),(25,'SB-BTU-SPL',NULL,'Batu Split / Kerikil Cor (Dummy)',3,7,260000,310000,290000,280000,10.0000,1,'2026-11-25 04:30:22','2026-11-25 04:30:22'),(26,'SB-PLW-12MM','899100512001','Triplek Meranti 12mm 122x244 (Dummy)',4,6,125000,145000,139000,133000,20.0000,1,'2026-11-25 04:30:22','2026-11-25 04:30:22'),(27,'SB-PLW-18MM','899100518001','Triplek Meranti 18mm 122x244 (Dummy)',4,6,185000,210000,202000,195000,15.0000,1,'2026-11-25 04:30:22','2026-11-25 04:30:22'),(28,'SB-GRC-04MM','899100504001','Papan GRC / Kalsiboard 4mm 122x244 (Dummy)',4,6,52000,62000,59000,56000,30.0000,1,'2026-11-25 04:30:22','2026-11-25 04:30:22'),(29,'SB-SKR-ROOF','899100600101','Baut Roofing Baja Ringan 10x19 (500 pcs/dus) (Dummy)',5,8,68000,85000,79000,74000,20.0000,1,'2026-11-25 04:30:22','2026-11-25 04:30:22'),(30,'SB-PKU-KYU','899100600201','Paku Kayu Campur 5-10cm SNI (Dummy)',5,5,14500,18000,16500,15500,50.0000,1,'2026-11-25 04:30:22','2026-11-25 04:30:22');
 /*!40000 ALTER TABLE `wp_sb_products` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `wp_sb_purchase_items`
+--
+
+DROP TABLE IF EXISTS `wp_sb_purchase_items`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `wp_sb_purchase_items` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `po_id` bigint unsigned NOT NULL,
+  `product_id` bigint unsigned NOT NULL,
+  `unit_id` bigint unsigned NOT NULL,
+  `qty_ordered` decimal(15,4) NOT NULL,
+  `qty_received` decimal(15,4) NOT NULL DEFAULT '0.0000',
+  `unit_cost` bigint NOT NULL,
+  `discount_amount` bigint NOT NULL DEFAULT '0',
+  `line_total` bigint NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_purchase_items_po` (`po_id`),
+  KEY `idx_purchase_items_product` (`product_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `wp_sb_purchase_items`
+--
+
+LOCK TABLES `wp_sb_purchase_items` WRITE;
+/*!40000 ALTER TABLE `wp_sb_purchase_items` DISABLE KEYS */;
+/*!40000 ALTER TABLE `wp_sb_purchase_items` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Table structure for table `wp_sb_purchase_orders`
+--
+
+DROP TABLE IF EXISTS `wp_sb_purchase_orders`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `wp_sb_purchase_orders` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `doc_number` varchar(30) COLLATE utf8mb4_unicode_520_ci NOT NULL,
+  `supplier_id` bigint unsigned NOT NULL,
+  `warehouse_id` bigint unsigned NOT NULL,
+  `po_date` date NOT NULL,
+  `expected_date` date DEFAULT NULL,
+  `subtotal` bigint NOT NULL DEFAULT '0',
+  `discount_amount` bigint NOT NULL DEFAULT '0',
+  `tax_amount` bigint NOT NULL DEFAULT '0',
+  `grand_total` bigint NOT NULL DEFAULT '0',
+  `paid_amount` bigint NOT NULL DEFAULT '0',
+  `status` enum('draft','disetujui','diterima_sebagian','diterima','batal') COLLATE utf8mb4_unicode_520_ci NOT NULL DEFAULT 'draft',
+  `cancel_reason` text COLLATE utf8mb4_unicode_520_ci,
+  `notes` text COLLATE utf8mb4_unicode_520_ci,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_purchase_orders_doc_number` (`doc_number`),
+  KEY `idx_purchase_orders_supplier` (`supplier_id`),
+  KEY `idx_purchase_orders_status` (`status`),
+  KEY `idx_purchase_orders_date` (`po_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `wp_sb_purchase_orders`
+--
+
+LOCK TABLES `wp_sb_purchase_orders` WRITE;
+/*!40000 ALTER TABLE `wp_sb_purchase_orders` DISABLE KEYS */;
+/*!40000 ALTER TABLE `wp_sb_purchase_orders` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --
@@ -343,7 +478,7 @@ CREATE TABLE `wp_sb_schema_versions` (
   `applied_at` datetime NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_version` (`version`)
-) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=6 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
@@ -352,7 +487,7 @@ CREATE TABLE `wp_sb_schema_versions` (
 
 LOCK TABLES `wp_sb_schema_versions` WRITE;
 /*!40000 ALTER TABLE `wp_sb_schema_versions` DISABLE KEYS */;
-INSERT INTO `wp_sb_schema_versions` VALUES (1,'Migration_001_Initial_Core','2026-11-25 03:07:42'),(2,'Migration_002_Inventory','2026-11-25 03:07:43'),(3,'Migration_003_Sales','2026-11-25 03:10:23');
+INSERT INTO `wp_sb_schema_versions` VALUES (1,'Migration_001_Initial_Core','2026-11-25 03:07:42'),(2,'Migration_002_Inventory','2026-11-25 03:07:43'),(3,'Migration_003_Sales','2026-11-25 03:10:23'),(4,'Migration_004_Purchasing','2026-11-27 02:25:06'),(5,'Migration_005_AP_Payments','2026-11-27 02:25:06');
 /*!40000 ALTER TABLE `wp_sb_schema_versions` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -486,6 +621,42 @@ LOCK TABLES `wp_sb_stock_opnames` WRITE;
 UNLOCK TABLES;
 
 --
+-- Table structure for table `wp_sb_supplier_payments`
+--
+
+DROP TABLE IF EXISTS `wp_sb_supplier_payments`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `wp_sb_supplier_payments` (
+  `id` bigint unsigned NOT NULL AUTO_INCREMENT,
+  `supplier_id` bigint unsigned NOT NULL,
+  `purchase_order_id` bigint unsigned NOT NULL,
+  `payment_number` varchar(30) COLLATE utf8mb4_unicode_520_ci NOT NULL,
+  `payment_date` datetime NOT NULL,
+  `method` enum('tunai','transfer') COLLATE utf8mb4_unicode_520_ci NOT NULL DEFAULT 'tunai',
+  `amount` bigint NOT NULL,
+  `reference` varchar(100) COLLATE utf8mb4_unicode_520_ci DEFAULT NULL,
+  `notes` text COLLATE utf8mb4_unicode_520_ci,
+  `created_by` bigint unsigned NOT NULL,
+  `created_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_supplier_payments_number` (`payment_number`),
+  KEY `idx_supplier_payments_po` (`purchase_order_id`),
+  KEY `idx_supplier_payments_supplier` (`supplier_id`),
+  KEY `idx_supplier_payments_date` (`payment_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_520_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Dumping data for table `wp_sb_supplier_payments`
+--
+
+LOCK TABLES `wp_sb_supplier_payments` WRITE;
+/*!40000 ALTER TABLE `wp_sb_supplier_payments` DISABLE KEYS */;
+/*!40000 ALTER TABLE `wp_sb_supplier_payments` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
 -- Table structure for table `wp_sb_suppliers`
 --
 
@@ -612,4 +783,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-11-25 13:42:21
+-- Dump completed on 2026-11-27  9:28:02
