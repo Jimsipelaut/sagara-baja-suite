@@ -27,6 +27,7 @@ require_once __DIR__ . '/Inventory/DummyDataSeederTest.php';
 
 // Sprint 2 Sales Test Suites
 require_once __DIR__ . '/Sales/SalesTest.php';
+require_once __DIR__ . '/Sales/ReceivablesAgingTest.php';
 
 // Sprint 3 Purchasing Test Suites
 require_once __DIR__ . '/Purchasing/PurchaseOrderTest.php';
@@ -51,6 +52,7 @@ $tests = [
     'SupplierRepository'   => new \SagaraBaja\Tests\Sales\SupplierRepositoryTest(),
     'ShiftService'         => new \SagaraBaja\Tests\Sales\ShiftServiceTest(),
     'SaleService'          => new \SagaraBaja\Tests\Sales\SaleServiceTest(),
+    'ReceivablesAging'     => new \SagaraBaja\Tests\Sales\ReceivablesAgingTest(),
     'PdfInvoiceService'    => new \SagaraBaja\Tests\Sales\PdfInvoiceServiceTest(),
     'PurchaseOrderService' => new \SagaraBaja\Tests\Purchasing\PurchaseOrderTest(),
     'GoodsReceiptService'  => new \SagaraBaja\Tests\Purchasing\GoodsReceiptTest(),

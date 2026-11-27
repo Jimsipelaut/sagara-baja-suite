@@ -616,6 +616,34 @@ class MockWPDB extends wpdb {
             return $payments;
         }
 
+        // Umur Piutang: penjualan terbit yang belum lunas (JOIN pelanggan).
+        if ( preg_match( "/FROM [`]?wp_sb_sales[`]? s\\b.*?WHERE s\\.status = 'terbit'/is", $query, $m ) ) {
+            $customer_id = null;
+            if ( preg_match( "/s\\.customer_id = (\\d+)/", $query, $cm ) ) {
+                $customer_id = (int) $cm[1];
+            }
+            $rows = [];
+            foreach ( $this->tables['wp_sb_sales'] as $sale ) {
+                if ( ( $sale['status'] ?? '' ) !== 'terbit' ) {
+                    continue;
+                }
+                if ( (int) ( $sale['paid_amount'] ?? 0 ) >= (int) ( $sale['grand_total'] ?? 0 ) ) {
+                    continue;
+                }
+                if ( $customer_id !== null && (int) ( $sale['customer_id'] ?? 0 ) !== $customer_id ) {
+                    continue;
+                }
+                $sale['customer_name'] = $this->tables['wp_sb_customers'][ $sale['customer_id'] ]['name'] ?? null;
+                $rows[] = $output === 'ARRAY_A' ? $sale : (object) $sale;
+            }
+            usort( $rows, static function ( $a, $b ) {
+                $a = (array) $a;
+                $b = (array) $b;
+                return [ $a['sale_date'], $a['id'] ] <=> [ $b['sale_date'], $b['id'] ];
+            } );
+            return $rows;
+        }
+
         // All Products
         if ( str_contains( $query, 'FROM `wp_sb_products` p' ) ) {
             $list = [];

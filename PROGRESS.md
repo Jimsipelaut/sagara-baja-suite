@@ -1,7 +1,7 @@
 # PROGRESS
 
 Terakhir diperbarui: 2026-11-27
-Fase saat ini: **Sprint 4 berjalan — AP payment + Admin UI Purchasing selesai; bagan akun, jurnal, kas/bank, penutupan, laporan, piutang umur masih terbuka**
+Fase saat ini: **Sprint 4 berjalan — AP payment + Admin UI Purchasing selesai, umur piutang selesai; bagan akun, jurnal, kas/bank, penutupan, laporan masih terbuka**
 
 Legenda: `[x]` selesai, `[~]` sedang dikerjakan, `[ ]` belum mulai, `[!]` terblokir
 
@@ -43,8 +43,8 @@ Legenda: `[x]` selesai, `[~]` sedang dikerjakan, `[ ]` belum mulai, `[!]` terblo
 ### Sprint 3 - Pembelian, hutang, piutang
 - [x] PO dan penerimaan barang
 - [x] Hutang usaha dasar tercatat (grand_total − paid_amount; paid_amount tetap 0)
-- [x] Pembayaran hutang usaha (selesai di Sprint 4, 2026-11-27 — lihat Sprint 4)
-- [ ] Piutang (umur piutang)
+- [x] Pembayaran hutang usaha (selesai di Sprint 4 — lihat Sprint 4)
+- [x] Piutang (umur piutang) — laporan umur piutang (ReceivablesAgingService + 5 tes)
 
 ### Sprint 4 - Pembukuan
 - [x] Pembayaran hutang usaha (AP payment): SupplierPaymentService + Migration_005 (tabel sb_supplier_payments, sequence BYR-SB/), 14 tes baru
