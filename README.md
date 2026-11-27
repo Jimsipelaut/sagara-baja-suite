@@ -2,7 +2,7 @@
 
 Sistem inventory, kasir (POS), dan invoice untuk **Sagara Baja** — toko material dan logistik bangunan di Setu, Bekasi. Dibangun sebagai plugin WordPress kustom dengan tabel database sendiri (prefix `wp_sb_*`), tanpa dependensi WooCommerce.
 
-> Status: **Sprint 3 selesai** — Inventory, Kasir POS, Invoice, dan Purchasing (PO & penerimaan barang) aktif. Lihat [PROGRESS.md](PROGRESS.md) untuk status terkini dan [SOUL.md](SOUL.md) untuk aturan kerja pengembangan.
+> Status: **Sprint 4 berjalan** — AP payment + Admin UI Purchasing dan laporan umur piutang selesai; bagan akun, jurnal, kas/bank, penutupan, dan laporan keuangan masih terbuka. Lihat [PROGRESS.md](PROGRESS.md) untuk status terkini dan [SOUL.md](SOUL.md) untuk aturan kerja pengembangan.
 
 ---
 
@@ -35,9 +35,9 @@ Satu sistem terpadu yang menghubungkan transaksi harian toko dengan stok, pembuk
 |---|---|---|
 | **Core** | ✅ Selesai | Peran & hak akses, audit log, penomoran dokumen, pengaturan toko |
 | **Inventory** | ✅ Selesai | Barang, satuan & konversi, harga bertingkat, multi-gudang, kartu stok, stock opname, impor CSV |
-| **Sales & POS** | ✅ Selesai | Pelanggan, supplier, shift kasir, terminal POS frontend, invoice resmi & nota non-resmi, pembayaran multi-metode |
-| **Purchasing** | ✅ Selesai (Sprint 3) | PO (draft → disetujui → diterima/batal), penerimaan barang (sebagian/penuh, tolak over-receipt), hutang usaha tercatat; pembayaran hutang di Sprint 4 |
-| Accounting | 🔲 Sprint 4 | Bagan akun, jurnal otomatis dan manual, kas & bank, laporan keuangan |
+| **Sales & POS** | ✅ Selesai | Pelanggan, supplier, shift kasir, terminal POS frontend, invoice resmi & nota non-resmi, pembayaran multi-metode, laporan umur piutang |
+| **Purchasing** | ✅ Selesai (Sprint 3 + Sprint 4 slice) | PO (draft → disetujui → diterima/batal), penerimaan barang (sebagian/penuh, tolak over-receipt), hutang usaha tercatat; pembayaran hutang selesai di Sprint 4 (AP payment + Admin UI Purchasing, Migration_005, nomor BYR-SB/) |
+| Accounting | 🔲 Sprint 4 (parsial) | AP payment dan laporan umur piutang selesai; bagan akun, jurnal otomatis dan manual, kas & bank, laporan keuangan masih terbuka |
 | HR | 🔲 Sprint 5 | Profil karyawan, dokumen, riwayat jabatan dan gaji |
 | Attendance | 🔲 Sprint 5 | Absen HP/QR, shift, izin, cuti, rekap bulanan |
 | Payroll | 🔲 Sprint 6 | Komponen gaji, lembur, kasbon, potongan, slip gaji PDF |
@@ -96,7 +96,7 @@ sagara-baja-suite/
 | `sb_admin` | Semua fitur kecuali pengaturan peran pengguna |
 | `sb_cashier` | Terminal POS, shift kasir, cetak struk |
 | `sb_warehouse` | Stok masuk/keluar, opname, transfer gudang |
-| `sb_finance` | Invoice, pembayaran, laporan piutang/hutang |
+| `sb_finance` | Invoice, jurnal, laporan keuangan dan piutang/hutang; Purchasing hanya lihat — pencatatan pembayaran hutang butuh Admin/Owner (`sb_manage_purchasing`) |
 | `sb_employee` | Data diri sendiri, slip gaji sendiri |
 
 ---
