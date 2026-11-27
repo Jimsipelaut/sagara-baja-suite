@@ -191,6 +191,17 @@ class MockWPDB extends wpdb {
                     'last_period' => null,
                     'updated_at' => '2026-01-01 00:00:00',
                 ],
+                // Sesuai seed Migration_005 (supplier_payment).
+                'supplier_payment' => [
+                    'id' => 6,
+                    'doc_type' => 'supplier_payment',
+                    'prefix' => 'BYR-SB/',
+                    'current_number' => 0,
+                    'pad_length' => 5,
+                    'reset_period' => 'yearly',
+                    'last_period' => null,
+                    'updated_at' => '2026-01-01 00:00:00',
+                ],
             ],
             'wp_sb_categories' => [],
             'wp_sb_units' => [],
@@ -212,6 +223,7 @@ class MockWPDB extends wpdb {
             'wp_sb_purchase_items' => [],
             'wp_sb_goods_receipts' => [],
             'wp_sb_goods_receipt_items' => [],
+            'wp_sb_supplier_payments' => [],
         ];
         $this->sequences =& $this->tables['wp_sb_document_sequences'];
         $this->insert_id = 10;
@@ -565,6 +577,31 @@ class MockWPDB extends wpdb {
                 }
             }
             return $items;
+        }
+
+        // Supplier Payments by PO
+        if ( preg_match( "/FROM [`]?wp_sb_supplier_payments[`]? WHERE purchase_order_id = (\d+)/i", $query, $m ) ) {
+            $pid = (int) $m[1];
+            $payments = [];
+            foreach ( $this->tables['wp_sb_supplier_payments'] as $p ) {
+                if ( (int) $p['purchase_order_id'] === $pid ) {
+                    $payments[] = $output === 'ARRAY_A' ? $p : (object) $p;
+                }
+            }
+            return $payments;
+        }
+
+        // All Supplier Payments (terbaru dulu)
+        if ( preg_match( "/FROM [`]?wp_sb_supplier_payments[`]? ORDER BY payment_date DESC/i", $query, $m ) ) {
+            $payments = array_values( $this->tables['wp_sb_supplier_payments'] );
+            usort( $payments, fn( $a, $b ) => (int) $b['id'] <=> (int) $a['id'] );
+            return array_map( fn( $p ) => $output === 'ARRAY_A' ? $p : (object) $p, $payments );
+        }
+
+        // All Purchase Orders (untuk daftar hutang)
+        if ( preg_match( "/FROM [`]?wp_sb_purchase_orders[`]? ORDER BY po_date ASC/i", $query, $m ) ) {
+            $list = array_values( $this->tables['wp_sb_purchase_orders'] );
+            return array_map( fn( $p ) => $output === 'ARRAY_A' ? $p : (object) $p, $list );
         }
 
         // Payments

@@ -1,7 +1,7 @@
 # PROGRESS
 
-Terakhir diperbarui: 2026-11-25
-Fase saat ini: **Sprint 3 selesai (Purchasing) — Sprint 4 berikutnya**
+Terakhir diperbarui: 2026-11-27
+Fase saat ini: **Sprint 4 berjalan — AP payment + Admin UI Purchasing selesai; bagan akun, jurnal, kas/bank, penutupan, laporan, piutang umur masih terbuka**
 
 Legenda: `[x]` selesai, `[~]` sedang dikerjakan, `[ ]` belum mulai, `[!]` terblokir
 
@@ -13,7 +13,7 @@ Legenda: `[x]` selesai, `[~]` sedang dikerjakan, `[ ]` belum mulai, `[!]` terblo
 |---|---|
 | SRS v0.1 | Selesai (draft, menunggu jawaban klien) |
 | Desain arsitektur gabungan | Selesai (usulan) |
-| Kode | Sprint 0 (Core), Sprint 1 (Inventory), Sprint 2 (Sales/POS) & Sprint 3 (Purchasing) Selesai |
+| Kode | Sprint 0 (Core), Sprint 1 (Inventory), Sprint 2 (Sales/POS), Sprint 3 (Purchasing) Selesai; Sprint 4 parsial (AP payment + Admin UI Purchasing selesai) |
 | Klien: jawaban pertanyaan terbuka | Menunggu |
 
 ## 2. Rencana Sprint
@@ -43,10 +43,12 @@ Legenda: `[x]` selesai, `[~]` sedang dikerjakan, `[ ]` belum mulai, `[!]` terblo
 ### Sprint 3 - Pembelian, hutang, piutang
 - [x] PO dan penerimaan barang
 - [x] Hutang usaha dasar tercatat (grand_total − paid_amount; paid_amount tetap 0)
-- [ ] Pembayaran hutang usaha (pindah ke Sprint 4 — Accounting)
+- [x] Pembayaran hutang usaha (selesai di Sprint 4, 2026-11-27 — lihat Sprint 4)
 - [ ] Piutang (umur piutang)
 
 ### Sprint 4 - Pembukuan
+- [x] Pembayaran hutang usaha (AP payment): SupplierPaymentService + Migration_005 (tabel sb_supplier_payments, sequence BYR-SB/), 14 tes baru
+- [x] Admin UI Purchasing: Daftar PO (filter status), Detail PO (baris barang, tanda terima, riwayat pembayaran, formulir catat pembayaran), Daftar Tanda Terima, Daftar Pembayaran Hutang
 - [ ] Bagan akun dan jurnal otomatis
 - [ ] Kas dan bank, biaya operasional
 - [ ] Penutupan periode
@@ -92,6 +94,11 @@ Legenda: `[x]` selesai, `[~]` sedang dikerjakan, `[ ]` belum mulai, `[!]` terblo
 | 2026-11-25 | Kolom `cancel_reason` ditambahkan ke sb_purchase_orders (tidak ada di spek awal) | Alasan batal wajib diisi (SOUL: koreksi beralasan); tanpa kolom ini alasan tidak punya tempat tersimpan |
 | 2026-11-25 | Admin UI Purchasing TIDAK dibuat di Sprint 3 | SalesAdmin/InventoryAdmin besar dan butuh nonce + capability per aksi; UI setengah jadi dilarang SOUL 3. Service + migrasi + tes adalah deliverable; UI menyusul saat dibutuhkan |
 | 2026-11-25 | Migrator menemukan migrasi lewat glob `core/Database/Migrations/*.php` (urut nama file) — tidak ada daftar migrasi yang diedit | Migration_004 terdaftar otomatis karena namanya urut setelah Migration_003 |
+| 2026-11-27 | Sequence baru 'supplier_payment' prefix BYR-SB/ (Migration_005) — urutan sendiri, tidak berbagi dengan PO (PO-SB/) atau tanda terima (GR-SB/) | SOUL 4.4: penomoran per jenis dokumen |
+| 2026-11-27 | PO TIDAK punya status 'lunas' — lunas diturunkan dari paid_amount == grand_total | State machine PO di Migration_004 tidak punya status lunas; menambah status baru akan mengubah mesin status Sprint 3. Status bayar (belum_bayar/sebagian/lunas) dihitung di service, bukan disimpan di PO |
+| 2026-11-27 | Pembayaran hutang hanya metode tunai/transfer; pencatatan butuh capability sb_manage_purchasing (Admin/Owner) — peran Keuangan (sb_finance) hanya bisa melihat (sb_view_purchasing) | Sesuai lingkup slice + pemetaan peran yang sudah ada di Roles.php. Bila Owner ingin Keuangan bisa mencatat pembayaran, itu perubahan peran, bukan kode |
+| 2026-11-27 | Slice AP payment TIDAK membuat jurnal dan TIDAK menggerakkan kas/bank — yang tercatat hanya baris sb_supplier_payments + paid_amount di PO | Bagan akun + jurnal + kas/bank adalah sisa Sprint 4. Pembayaran tercatat tapi saldo kas belum berkurang sampai jurnal dibuat — jangan anggap laporan kas sudah benar |
+| 2026-11-27 | Migration_004 jalan ulang secara idempotent saat reaktivasi di runtime yang di-rebuild (schema_versions ter-reset oleh impor dump lama) — CREATE TABLE IF NOT EXISTS + seed-jika-belum-ada | Dump di repo diambil sebelum Sprint 3, jadi impor dump menimpa schema_versions dan document_sequences ke kondisi pra-Sprint 3; reaktivasi memperbaiki keduanya tanpa merusak data |
 
 ## 4. Pertanyaan Terbuka (menunggu klien)
 
@@ -115,10 +122,19 @@ Legenda: `[x]` selesai, `[~]` sedang dikerjakan, `[ ]` belum mulai, `[!]` terblo
 | Data gaji bocor | Pelanggaran privasi | Capability ketat, tanpa endpoint publik, uji akses |
 | Scope creep | Jadwal molor | Perubahan lewat log keputusan dan persetujuan Owner |
 | Hosting lemah | Kasir lambat | Spesifikasi minimum, cache, uji beban 10.000 SKU |
-| Transaksi bersarang (NumberingService & StockService masing-masing COMMIT sendiri) | Di MySQL nyata, COMMIT di dalam service yang dipanggil dari transaksi luar bersifat progresif — gagal di akhir penerimaan tidak membatalkan mutasi stok awal | Seluruh validasi (status, over-receipt, duplikat baris) dilakukan SEBELUM mutasi pertama; penerimaan juga mengunci baris PO (FOR UPDATE) dan memvalidasi ulang di dalam transaksi. Pola ini diwarisi dari SaleService::publish yang sudah ada — perbaikan menyeluruh (transaksi bersarang yang benar) butuh refactor StockService/NumberingService, di luar Sprint 3 |
+| Transaksi bersarang (NumberingService & StockService masing-masing COMMIT sendiri) | Di MySQL nyata, COMMIT di dalam service yang dipanggil dari transaksi luar bersifat progresif — gagal di akhir penerimaan tidak membatalkan mutasi stok awal | Seluruh validasi (status, over-receipt, duplikat baris) dilakukan SEBELUM mutasi pertama; penerimaan juga mengunci baris PO (FOR UPDATE) dan memvalidasi ulang di dalam transaksi. Pola ini diwarisi dari SaleService::publish yang sudah ada — perbaikan menyeluruh (transaksi bersarang yang benar) butuh refactor StockService/NumberingService, di luar Sprint 3. SupplierPaymentService mewarisi pola yang sama di Sprint 4 |
+| Pembayaran hutang tercatat tanpa jurnal/kas | Saldo kas tidak berkurang saat hutang dibayar — laporan kas/arus kas akan salah sampai jurnal dibuat | Sisa Sprint 4 (bagan akun + jurnal + kas/bank) wajib dikerjakan sebelum laporan keuangan dipakai. Sementara ini pembayaran hanya jejak di sb_supplier_payments + audit log |
 | assert() mati di php.ini production | `php tests/run.php` tampil "SEMUA LULUS" padahal assert() tidak dieksekusi sama sekali (zend.assertions=-1 di VM ini) | tests/run.php kini BERHENTI (exit 2) bila assert() tidak aktif dan memberi tahu perintah yang benar: `php -d zend.assertions=1 -d assert.exception=1 tests/run.php`. Risiko ini berlaku juga untuk suite lama, bukan hanya Sprint 3 |
 
 ## 6. Changelog
+
+### 0.5.0-ap (2026-11-27)
+- Migrasi database `Migration_005_AP_Payments` membuat tabel `sb_supplier_payments` (supplier_id, purchase_order_id, nomor pembayaran, jumlah integer, metode tunai/transfer, tanggal bayar, referensi, catatan, dibuat_oleh) dan men-seed sequence `supplier_payment` (BYR-SB/). Ditemukan otomatis oleh Migrator (glob) — tidak ada daftar migrasi yang diedit.
+- `SupplierPaymentService`: catat pembayaran hutang hanya untuk PO yang sudah ada penerimaan barang (draft/batal/tanpa penerimaan ditolak); jumlah integer > 0 dan ≤ sisa hutang (grand_total − paid_amount), overpayment ditolak; nomor pembayaran dari NumberingService di dalam transaksi; paid_amount PO diperbarui atomik (row lock FOR UPDATE + validasi ulang di dalam transaksi); audit log per pembayaran; mengembalikan pembayaran + sisa hutang + status (lunas bila paid_amount == grand_total). PO tidak punya status 'lunas' — status bayar diturunkan, bukan disimpan.
+- `PurchasingAdmin`: halaman admin di bawah menu Sagara Baja — Daftar PO (filter status, kolom sisa hutang + status bayar), Detail PO (baris barang, tanda terima, riwayat pembayaran, formulir catat pembayaran dengan nonce + capability sb_manage_purchasing), Daftar Tanda Terima, Daftar Pembayaran Hutang. Didaftarkan di `Plugin.php` seperti SalesAdmin.
+- Slice ini TIDAK membuat jurnal dan TIDAK menggerakkan kas/bank (tetap terbuka di sisa Sprint 4).
+- Unit Test suite AP payment lengkap (14 test: sukses sebagian, lunas penuh, overpayment, 0/negatif, draft/batal/tanpa penerimaan, sebagian-lalu-lunas, nomor unik, getOutstanding, metode tidak dikenal, PO tidak ada, daftar hutang, daftar pembayaran) lulus 100% bersama seluruh suite lama: total 86 test (dari 72), dijalankan dengan assert() aktif: `php -d zend.assertions=1 -d assert.exception=1 tests/run.php` (exit 0). Mock `MockWPDB` diperluas: tabel + sequence supplier_payment dan handler `get_results` untuk pembayaran per PO, daftar pembayaran, dan daftar PO.
+- Verifikasi runtime WordPress VM (MySQL nyata): reaktivasi plugin menjalankan Migration_004 ulang (idempotent) + Migration_005; alur end-to-end nyata PO-SB/2026/00001 (Besi Beton 8mm, 10 batang × Rp45.000 = Rp450.000) → disetujui → tanda terima GR-SB/2026/00001 (stok 500 → 510) → bayar Rp200.000 tunai via Admin UI (BYR-SB/2026/00001) → bayar Rp250.000 transfer via Admin UI (BYR-SB/2026/00002) → lunas; keempat halaman admin Purchasing mengembalikan 200 saat login; 2 entri audit log 'supplier_payment'.
 
 ### 0.4.0-purchasing (2026-11-25)
 - Migrasi database `Migration_004_Purchasing` membuat 4 tabel: `sb_purchase_orders`, `sb_purchase_items`, `sb_goods_receipts`, `sb_goods_receipt_items`; men-seed sequence `goods_receipt` (GR-SB/). Sequence `purchase_order` (PO-SB/) sudah ada sejak Migration_001.

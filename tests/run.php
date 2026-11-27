@@ -32,6 +32,9 @@ require_once __DIR__ . '/Sales/SalesTest.php';
 require_once __DIR__ . '/Purchasing/PurchaseOrderTest.php';
 require_once __DIR__ . '/Purchasing/GoodsReceiptTest.php';
 
+// Sprint 4 (slice AP payment + Admin UI Purchasing) Test Suites
+require_once __DIR__ . '/Purchasing/SupplierPaymentTest.php';
+
 echo "=== Menjalankan Test Suite Sagara Baja Suite ===\n\n";
 
 $tests = [
@@ -51,6 +54,7 @@ $tests = [
     'PdfInvoiceService'    => new \SagaraBaja\Tests\Sales\PdfInvoiceServiceTest(),
     'PurchaseOrderService' => new \SagaraBaja\Tests\Purchasing\PurchaseOrderTest(),
     'GoodsReceiptService'  => new \SagaraBaja\Tests\Purchasing\GoodsReceiptTest(),
+    'SupplierPaymentService' => new \SagaraBaja\Tests\Purchasing\SupplierPaymentTest(),
 ];
 
 $failed = 0;
