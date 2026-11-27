@@ -132,12 +132,18 @@ class MockWPDB extends wpdb {
     public array $inserted_rows = [];
     public array $updated_rows = [];
     public array $sequences = [];
+    /** Tumpukan snapshot transaksi (C-01): satu entri per START TRANSACTION. */
+    private array $tx_stack = [];
 
     public function __construct() {
         $this->reset();
     }
 
     public function reset(): void {
+        $this->tx_stack = [];
+        if ( class_exists( 'SagaraBaja\\Core\\Database\\Transaction' ) ) {
+            \SagaraBaja\Core\Database\Transaction::resetAll();
+        }
         $this->tables = [
             'wp_sb_document_sequences' => [
                 'invoice_resmi' => [
@@ -238,6 +244,26 @@ class MockWPDB extends wpdb {
 
     public function query( string $query ): bool {
         $this->queries[] = $query;
+        // C-01: simulasikan semantik transaksi MySQL agar tes regresi
+        // rollback bermakna — sebelumnya START/COMMIT/ROLLBACK di sini
+        // tidak berbuat apa-apa sehingga kegagalan di tengah transaksi
+        // tetap meninggalkan tulisan parsial di tabel mock.
+        $q = strtoupper( trim( $query ) );
+        if ( $q === 'START TRANSACTION' ) {
+            $this->tx_stack[] = [
+                'tables'    => unserialize( serialize( $this->tables ) ),
+                'insert_id' => $this->insert_id,
+            ];
+        } elseif ( $q === 'COMMIT' ) {
+            array_pop( $this->tx_stack );
+        } elseif ( $q === 'ROLLBACK' ) {
+            $snap = array_pop( $this->tx_stack );
+            if ( $snap !== null ) {
+                $this->tables    = $snap['tables'];
+                $this->insert_id = $snap['insert_id'];
+                $this->sequences =& $this->tables['wp_sb_document_sequences'];
+            }
+        }
         return true;
     }
 

@@ -1,6 +1,7 @@
 <?php
 namespace SagaraBaja\Modules\Sales\Services;
 
+use SagaraBaja\Core\Database\Transaction;
 use SagaraBaja\Core\Document\NumberingService;
 use SagaraBaja\Modules\Inventory\Services\StockService;
 
@@ -74,7 +75,7 @@ class SaleService {
 			throw new \InvalidArgumentException( 'Total akhir tidak boleh negatif. Periksa diskon.' );
 		}
 
-		$this->wpdb->query( 'START TRANSACTION' );
+		Transaction::begin( $this->wpdb );
 		try {
 			$doc_type = $data['invoice_type'] === 'resmi' ? 'invoice_resmi' : 'nota_non_resmi';
 			$doc_no   = $this->numbering->generate( $doc_type );
@@ -103,11 +104,11 @@ class SaleService {
 			$sale_id = (int) $this->wpdb->insert_id;
 			$this->insertItems( $sale_id, $items );
 
-			$this->wpdb->query( 'COMMIT' );
+			Transaction::commit( $this->wpdb );
 			return $sale_id;
 
 		} catch ( \Throwable $e ) {
-			$this->wpdb->query( 'ROLLBACK' );
+			Transaction::rollback( $this->wpdb );
 			throw $e;
 		}
 	}
@@ -118,7 +119,7 @@ class SaleService {
 	 * @throws \RuntimeException jika status bukan 'draft' atau stok tidak cukup.
 	 */
 	public function publish( int $sale_id ): void {
-		$this->wpdb->query( 'START TRANSACTION' );
+		Transaction::begin( $this->wpdb );
 		try {
 			$sale = $this->wpdb->get_row(
 				$this->wpdb->prepare( "SELECT * FROM {$this->t_sales} WHERE id = %d FOR UPDATE", $sale_id ),
@@ -147,10 +148,10 @@ class SaleService {
 			}
 
 			$this->wpdb->update( $this->t_sales, [ 'status' => 'terbit' ], [ 'id' => $sale_id ] );
-			$this->wpdb->query( 'COMMIT' );
+			Transaction::commit( $this->wpdb );
 
 		} catch ( \Throwable $e ) {
-			$this->wpdb->query( 'ROLLBACK' );
+			Transaction::rollback( $this->wpdb );
 			throw $e;
 		}
 	}
@@ -160,7 +161,15 @@ class SaleService {
 	/**
 	 * Tambah pembayaran ke dokumen. Otomatis tandai 'lunas' jika paid_amount ≥ grand_total.
 	 *
-	 * @param array{method:string, amount:int, reference?:string, notes?:string, created_by:int} $payment
+	 * Idempotensi (C-13): pemanggil boleh menyertakan 'idempotency_key'
+	 * (satu token per pengiriman formulir / per percobaan checkout).
+	 * Pengiriman ulang dengan kunci yang sama mengembalikan ID pembayaran
+	 * yang sudah tercatat, bukan mencatat yang baru — klik ganda tidak
+	 * menggandakan pembayaran. Kunci disimpan di kolom idempotency_key
+	 * dengan UNIQUE KEY sebagai pengaman terakhir di database; tanpa
+	 * kunci, perilaku lama berlaku.
+	 *
+	 * @param array{method:string, amount:int, reference?:string, notes?:string, idempotency_key?:string, created_by:int} $payment
 	 * @throws \InvalidArgumentException jika amount ≤ 0.
 	 * @throws \RuntimeException jika status bukan 'terbit'.
 	 */
@@ -170,13 +179,15 @@ class SaleService {
 			throw new \InvalidArgumentException( 'Jumlah bayar harus lebih dari nol.' );
 		}
 
+		$idem_key = self::normalizeIdempotencyKey( $payment['idempotency_key'] ?? null );
+
 		$allowed_methods = [ 'tunai', 'transfer', 'qris', 'kasbon' ];
 		$method = $payment['method'] ?? 'tunai';
 		if ( ! in_array( $method, $allowed_methods, true ) ) {
 			throw new \InvalidArgumentException( "Metode bayar '{$method}' tidak dikenali." );
 		}
 
-		$this->wpdb->query( 'START TRANSACTION' );
+		Transaction::begin( $this->wpdb );
 		try {
 			$sale = $this->wpdb->get_row(
 				$this->wpdb->prepare( "SELECT * FROM {$this->t_sales} WHERE id = %d FOR UPDATE", $sale_id ),
@@ -185,6 +196,19 @@ class SaleService {
 			if ( ! $sale ) {
 				throw new \RuntimeException( "Dokumen ID {$sale_id} tidak ditemukan." );
 			}
+
+			// C-13: replay dicek SEBELUM cek status — pembayaran pertama
+			// bisa saja sudah membuat dokumen 'lunas', dan pengiriman ulang
+			// dengan kunci yang sama tetap harus mengembalikan pembayaran
+			// lama, bukan ditolak karena status sudah berubah.
+			if ( $idem_key !== null ) {
+				$existing = $this->findByIdempotencyKey( $sale_id, $idem_key );
+				if ( $existing !== null ) {
+					Transaction::commit( $this->wpdb );
+					return (int) $existing['id'];
+				}
+			}
+
 			if ( $sale['status'] !== 'terbit' ) {
 				throw new \RuntimeException( "Pembayaran hanya bisa ditambahkan ke dokumen berstatus 'terbit'. Status: {$sale['status']}." );
 			}
@@ -195,10 +219,21 @@ class SaleService {
 				'method'       => $method,
 				'amount'       => $amount,
 				'reference'    => $payment['reference'] ?? null,
+				'idempotency_key' => $idem_key,
 				'notes'        => $payment['notes']     ?? null,
 				'created_by'   => (int) $payment['created_by'],
 			] );
 			if ( $ok === false ) {
+				// C-13: pengaman terakhir — bila dua pengiriman bersamaan
+				// sama-sama lolos cek di atas, UNIQUE KEY menolak yang kedua.
+				// Kembalikan pembayaran pertama, bukan error.
+				if ( $idem_key !== null && stripos( (string) $this->wpdb->last_error, 'Duplicate' ) !== false ) {
+					$existing = $this->findByIdempotencyKey( $sale_id, $idem_key );
+					if ( $existing !== null ) {
+						Transaction::commit( $this->wpdb );
+						return (int) $existing['id'];
+					}
+				}
 				throw new \RuntimeException( 'Gagal mencatat pembayaran: ' . $this->wpdb->last_error );
 			}
 			$payment_id = (int) $this->wpdb->insert_id;
@@ -210,11 +245,11 @@ class SaleService {
 				'status'      => $new_status,
 			], [ 'id' => $sale_id ] );
 
-			$this->wpdb->query( 'COMMIT' );
+			Transaction::commit( $this->wpdb );
 			return $payment_id;
 
 		} catch ( \Throwable $e ) {
-			$this->wpdb->query( 'ROLLBACK' );
+			Transaction::rollback( $this->wpdb );
 			throw $e;
 		}
 	}
@@ -232,7 +267,7 @@ class SaleService {
 			throw new \InvalidArgumentException( 'Alasan pembatalan wajib diisi.' );
 		}
 
-		$this->wpdb->query( 'START TRANSACTION' );
+		Transaction::begin( $this->wpdb );
 		try {
 			$sale = $this->wpdb->get_row(
 				$this->wpdb->prepare( "SELECT * FROM {$this->t_sales} WHERE id = %d FOR UPDATE", $sale_id ),
@@ -271,10 +306,10 @@ class SaleService {
 				'void_reason' => $reason,
 			], [ 'id' => $sale_id ] );
 
-			$this->wpdb->query( 'COMMIT' );
+			Transaction::commit( $this->wpdb );
 
 		} catch ( \Throwable $e ) {
-			$this->wpdb->query( 'ROLLBACK' );
+			Transaction::rollback( $this->wpdb );
 			throw $e;
 		}
 	}
@@ -307,6 +342,42 @@ class SaleService {
 			$this->wpdb->prepare( "SELECT * FROM {$this->t_payments} WHERE sale_id = %d ORDER BY payment_date ASC", $sale_id ),
 			ARRAY_A
 		);
+	}
+
+	/**
+	 * Cari pembayaran atas dokumen ini berdasarkan kunci idempotensi.
+	 * Dipakai C-13 (pengiriman ulang) dan handler admin (hindari audit
+	 * ganda). Mengembalikan null bila kunci tidak pernah tercatat.
+	 */
+	public function findByIdempotencyKey( int $sale_id, string $key ): ?array {
+		$key = self::normalizeIdempotencyKey( $key );
+		if ( $key === null ) {
+			return null;
+		}
+		foreach ( $this->getPayments( $sale_id ) as $row ) {
+			if ( ( $row['idempotency_key'] ?? null ) === $key ) {
+				return $row;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Normalisasi kunci idempotensi: kosong → null (tanpa kunci, perilaku
+	 * lama); maks. 64 karakter [A-Za-z0-9_-]; selain itu ditolak.
+	 */
+	public static function normalizeIdempotencyKey( $key ): ?string {
+		if ( $key === null ) {
+			return null;
+		}
+		$key = trim( (string) $key );
+		if ( $key === '' ) {
+			return null;
+		}
+		if ( strlen( $key ) > 64 || ! preg_match( '/^[A-Za-z0-9_-]+$/', $key ) ) {
+			throw new \InvalidArgumentException( 'Kunci idempotensi tidak valid (maks. 64 karakter, huruf/angka/-/_).' );
+		}
+		return $key;
 	}
 
 	// ── Helper Privat ─────────────────────────────────────────────────────────

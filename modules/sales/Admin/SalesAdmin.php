@@ -359,13 +359,25 @@ class SalesAdmin {
 		if ( ! current_user_can( 'sb_process_sale' ) ) wp_die( 'Akses ditolak.' );
 		check_admin_referer( 'sb_add_payment' );
 		$sale_id = (int) ( $_POST['sale_id'] ?? 0 );
+		// C-13: bila pengiriman ini sudah pernah tercatat (klik ganda),
+		// langsung kembali tanpa audit log baru — service mengembalikan
+		// pembayaran lama, bukan mencatat yang baru.
+		$idem_key = sanitize_text_field( $_POST['idempotency_key'] ?? '' );
+		if ( $idem_key !== '' ) {
+			$existing = $this->sale_service->findByIdempotencyKey( $sale_id, $idem_key );
+			if ( $existing !== null ) {
+				wp_redirect( admin_url( 'admin.php?page=sb-sales&paid=' . $sale_id ) );
+				exit;
+			}
+		}
 		try {
 			$pid = $this->sale_service->addPayment( $sale_id, [
-				'method'     => sanitize_text_field( $_POST['method'] ?? 'tunai' ),
-				'amount'     => (int) ( $_POST['amount'] ?? 0 ),
-				'reference'  => sanitize_text_field( $_POST['reference'] ?? '' ),
-				'notes'      => sanitize_textarea_field( $_POST['notes'] ?? '' ),
-				'created_by' => get_current_user_id(),
+				'method'          => sanitize_text_field( $_POST['method'] ?? 'tunai' ),
+				'amount'          => (int) ( $_POST['amount'] ?? 0 ),
+				'reference'       => sanitize_text_field( $_POST['reference'] ?? '' ),
+				'notes'           => sanitize_textarea_field( $_POST['notes'] ?? '' ),
+				'idempotency_key' => $idem_key,
+				'created_by'      => get_current_user_id(),
 			] );
 			$this->audit->log( 'payment_added', 'sb_payments', $pid, null, [] );
 			wp_redirect( admin_url( 'admin.php?page=sb-sales&paid=' . $sale_id ) );

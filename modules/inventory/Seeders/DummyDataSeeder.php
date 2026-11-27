@@ -1,6 +1,7 @@
 <?php
 namespace SagaraBaja\Modules\Inventory\Seeders;
 
+use SagaraBaja\Core\Database\Transaction;
 use SagaraBaja\Modules\Inventory\Repositories\ProductRepository;
 use SagaraBaja\Modules\Inventory\Services\StockService;
 use SagaraBaja\Modules\Inventory\Services\UnitConversionService;
@@ -40,7 +41,7 @@ class DummyDataSeeder {
 	}
 
 	public function run(): array {
-		$this->wpdb->query( "START TRANSACTION" );
+		Transaction::begin( $this->wpdb );
 
 		try {
 			// 1. Gudang
@@ -618,14 +619,14 @@ class DummyDataSeeder {
 				}
 			}
 
-			$this->wpdb->query( "COMMIT" );
+			Transaction::commit( $this->wpdb );
 
 			return [
 				'status'   => 'success',
 				'products' => $seeded_products,
 			];
 		} catch ( \Throwable $e ) {
-			$this->wpdb->query( "ROLLBACK" );
+			Transaction::rollback( $this->wpdb );
 			throw $e;
 		}
 	}

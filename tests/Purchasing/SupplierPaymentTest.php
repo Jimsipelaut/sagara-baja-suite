@@ -41,6 +41,10 @@ class SupplierPaymentTest {
 		$this->test_payment_on_unknown_po_rejected();
 		$this->test_list_payables();
 		$this->test_list_payments();
+		$this->test_idempotent_replay_returns_same_payment();
+		$this->test_idempotent_replay_after_po_lunas();
+		$this->test_different_idempotency_keys_record_twice();
+		$this->test_invalid_idempotency_key_rejected();
 	}
 
 	private function seedMaster( $wpdb ): void {
@@ -114,6 +118,116 @@ class SupplierPaymentTest {
 			'method'     => $method,
 			'created_by' => 1,
 		] );
+	}
+
+	/**
+	 * C-13: pengiriman ulang dengan kunci idempotensi yang sama harus
+	 * mengembalikan pembayaran lama — 1 baris, paid_amount tidak
+	 * bertambah, nomor pembayaran sama, dan audit log hanya 1 entri.
+	 */
+	private function test_idempotent_replay_returns_same_payment(): void {
+		global $wpdb;
+		$po_id = $this->makeReceivedPo();
+		$key   = 'uji-klik-ganda-001';
+		$first = $this->pay_svc->recordPayment( $po_id, [
+			'amount'          => 200000,
+			'method'          => 'tunai',
+			'created_by'      => 1,
+			'idempotency_key' => $key,
+		] );
+		$second = $this->pay_svc->recordPayment( $po_id, [
+			'amount'          => 200000,
+			'method'          => 'tunai',
+			'created_by'      => 1,
+			'idempotency_key' => $key,
+		] );
+
+		assert( $second['payment_id'] === $first['payment_id'], 'Replay harus mengembalikan payment_id yang sama.' );
+		assert( $second['payment_number'] === $first['payment_number'], 'Replay harus mengembalikan nomor pembayaran yang sama.' );
+		assert( $second['paid_amount'] === 200000, 'paid_amount harus tetap 200000 — replay tidak boleh menambah bayar.' );
+		assert( $second['outstanding'] === 400000, 'Sisa hutang harus tetap 400000.' );
+		assert( count( $this->pay_svc->getPaymentsByPo( $po_id ) ) === 1, 'Hanya boleh ada 1 baris pembayaran untuk PO ini.' );
+		$row = $this->pay_svc->findPayment( $first['payment_id'] );
+		assert( ( $row['idempotency_key'] ?? null ) === $key, 'Kunci idempotensi harus tersimpan di baris pembayaran.' );
+
+		$audit = array_filter(
+			$wpdb->tables['wp_sb_audit_logs'],
+			fn( $log ) => ( $log['action'] ?? '' ) === 'supplier_payment'
+				&& ( ( json_decode( $log['new_values'] ?? '', true )['payment_number'] ?? '' ) === $first['payment_number'] )
+		);
+		assert( count( $audit ) === 1, 'Audit log pembayaran harus 1 entri — replay tidak boleh mencatat audit baru.' );
+
+		$found = $this->pay_svc->findByIdempotencyKey( $po_id, $key );
+		assert( $found !== null && (int) $found['id'] === $first['payment_id'], 'findByIdempotencyKey harus menemukan pembayaran lama.' );
+		echo "  [PASS] test_idempotent_replay_returns_same_payment\n";
+	}
+
+	/**
+	 * C-13 (regresi, ditemukan di VM 27 Nov 2026): replay harus tetap
+	 * berhasil walau sisa hutang kini lebih kecil dari jumlah pembayaran
+	 * pertama — mis. PO sudah dilunasi pembayaran lain sesudahnya.
+	 * Sebelum perbaikan, replay ditolak sebagai overpayment.
+	 */
+	private function test_idempotent_replay_after_po_lunas(): void {
+		$po_id = $this->makeReceivedPo();
+		$first = $this->pay_svc->recordPayment( $po_id, [
+			'amount' => 200000, 'method' => 'tunai', 'created_by' => 1, 'idempotency_key' => 'replay-setelah-lunas',
+		] );
+		// Lunasi sisa 400000 dengan kunci berbeda.
+		$this->pay_svc->recordPayment( $po_id, [
+			'amount' => 400000, 'method' => 'transfer', 'created_by' => 1, 'idempotency_key' => 'pelunasan-001',
+		] );
+		$po = $this->po_svc->find( $po_id );
+		assert( (int) $po['paid_amount'] === 600000, 'PO harus lunas (600000) sebelum replay.' );
+
+		$replay = $this->pay_svc->recordPayment( $po_id, [
+			'amount' => 200000, 'method' => 'tunai', 'created_by' => 1, 'idempotency_key' => 'replay-setelah-lunas',
+		] );
+		assert( $replay['payment_id'] === $first['payment_id'], 'Replay setelah lunas harus mengembalikan pembayaran pertama.' );
+		assert( $replay['paid_amount'] === 600000, 'paid_amount harus tetap 600000.' );
+		assert( $replay['outstanding'] === 0, 'Sisa hutang harus tetap 0.' );
+		assert( $replay['status'] === 'lunas', "Status replay harus 'lunas'." );
+		assert( count( $this->pay_svc->getPaymentsByPo( $po_id ) ) === 2, 'Tetap hanya 2 baris pembayaran.' );
+		echo "  [PASS] test_idempotent_replay_after_po_lunas\n";
+	}
+
+	/**
+	 * C-13: dua kunci berbeda adalah dua pembayaran berbeda (bukan
+	 * duplikat) — masing-masing tercatat dan paid_amount bertambah.
+	 */
+	private function test_different_idempotency_keys_record_twice(): void {
+		$po_id = $this->makeReceivedPo();
+		$first = $this->pay_svc->recordPayment( $po_id, [
+			'amount' => 200000, 'method' => 'tunai', 'created_by' => 1, 'idempotency_key' => 'kunci-a-001',
+		] );
+		$second = $this->pay_svc->recordPayment( $po_id, [
+			'amount' => 200000, 'method' => 'tunai', 'created_by' => 1, 'idempotency_key' => 'kunci-b-001',
+		] );
+		assert( $second['payment_id'] !== $first['payment_id'], 'Kunci berbeda harus menghasilkan pembayaran berbeda.' );
+		assert( $second['paid_amount'] === 400000, 'paid_amount harus 400000 setelah dua pembayaran berbeda.' );
+		assert( count( $this->pay_svc->getPaymentsByPo( $po_id ) ) === 2, 'PO harus punya 2 baris pembayaran.' );
+		echo "  [PASS] test_different_idempotency_keys_record_twice\n";
+	}
+
+	/**
+	 * C-13: kunci idempotensi yang tidak valid (karakter dilarang /
+	 * lebih dari 64 karakter) harus ditolak, bukan disimpan diam-diam.
+	 */
+	private function test_invalid_idempotency_key_rejected(): void {
+		$po_id = $this->makeReceivedPo();
+		foreach ( [ 'kunci ada spasi', str_repeat( 'x', 65 ), 'kunci/tidak/valid' ] as $bad_key ) {
+			$thrown = false;
+			try {
+				$this->pay_svc->recordPayment( $po_id, [
+					'amount' => 100000, 'method' => 'tunai', 'created_by' => 1, 'idempotency_key' => $bad_key,
+				] );
+			} catch ( \InvalidArgumentException $e ) {
+				$thrown = true;
+			}
+			assert( $thrown, "Kunci idempotensi '{$bad_key}' harus ditolak." );
+		}
+		assert( count( $this->pay_svc->getPaymentsByPo( $po_id ) ) === 0, 'Tidak boleh ada pembayaran tersimpan dari kunci yang ditolak.' );
+		echo "  [PASS] test_invalid_idempotency_key_rejected\n";
 	}
 
 	private function test_record_payment_success_partial(): void {

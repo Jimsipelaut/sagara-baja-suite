@@ -14,6 +14,7 @@ if ( (int) ini_get( 'zend.assertions' ) !== 1 ) {
 	exit( 2 );
 }
 require_once __DIR__ . '/Core/NumberingServiceTest.php';
+require_once __DIR__ . '/Core/TransactionTest.php';
 require_once __DIR__ . '/Core/AuditLoggerTest.php';
 require_once __DIR__ . '/Core/RolesTest.php';
 require_once __DIR__ . '/Core/SettingsRepositoryTest.php';
@@ -41,6 +42,7 @@ echo "=== Menjalankan Test Suite Sagara Baja Suite ===\n\n";
 $tests = [
     'Roles & Capabilities' => new \SagaraBaja\Tests\Core\RolesTest(),
     'NumberingService'     => new \SagaraBaja\Tests\Core\NumberingServiceTest(),
+    'Transaction'          => new \SagaraBaja\Tests\Core\TransactionTest(),
     'AuditLogger'          => new \SagaraBaja\Tests\Core\AuditLoggerTest(),
     'SettingsRepository'   => new \SagaraBaja\Tests\Core\SettingsRepositoryTest(),
     'UnitConversion'       => new \SagaraBaja\Tests\Inventory\UnitConversionTest(),

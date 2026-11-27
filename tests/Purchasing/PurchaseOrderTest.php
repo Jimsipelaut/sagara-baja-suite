@@ -22,6 +22,7 @@ class PurchaseOrderTest {
 		$this->test_create_draft_totals( $svc );
 		$this->test_create_draft_no_stock_change( $svc, $stock );
 		$this->test_approve( $svc );
+		$this->test_approve_writes_audit_log( $svc );
 		$this->test_approve_twice_rejected( $svc );
 		$this->test_cancel_draft_ok( $svc );
 		$this->test_cancel_without_reason_rejected( $svc );
@@ -116,6 +117,30 @@ class PurchaseOrderTest {
 		$po = $svc->find( $id );
 		assert( $po['status'] === 'disetujui', "Status harus 'disetujui' setelah approve." );
 		echo "  [PASS] test_approve\n";
+	}
+
+	/**
+	 * C-05: approve() harus menulis 1 entri audit 'po_approve' dengan
+	 * nomor PO sebagai object_id dan perubahan status draft → disetujui.
+	 */
+	private function test_approve_writes_audit_log( PurchaseOrderService $svc ): void {
+		global $wpdb;
+		$id = $svc->createDraft( $this->base_data() );
+		$doc_number = $svc->find( $id )['doc_number'];
+		$svc->approve( $id );
+
+		$logs = array_values( array_filter(
+			$wpdb->tables['wp_sb_audit_logs'],
+			fn( $log ) => ( $log['action'] ?? '' ) === 'po_approve'
+				&& ( $log['object_id'] ?? '' ) === $doc_number
+		) );
+		assert( count( $logs ) === 1, 'Approve harus menulis tepat 1 entri audit po_approve untuk PO ini.' );
+		$old = json_decode( $logs[0]['old_values'] ?? '', true );
+		$new = json_decode( $logs[0]['new_values'] ?? '', true );
+		assert( ( $old['status'] ?? '' ) === 'draft', "Audit lama harus mencatat status 'draft'." );
+		assert( ( $new['status'] ?? '' ) === 'disetujui', "Audit baru harus mencatat status 'disetujui'." );
+		assert( ( $logs[0]['object_type'] ?? '' ) === 'purchase_order', "object_type audit harus 'purchase_order'." );
+		echo "  [PASS] test_approve_writes_audit_log\n";
 	}
 
 	private function test_approve_twice_rejected( PurchaseOrderService $svc ): void {

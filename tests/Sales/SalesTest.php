@@ -176,6 +176,8 @@ class SaleServiceTest {
 		$this->test_void_lunas_rejected( $svc );
 		$this->test_empty_items_rejected( $svc );
 		$this->test_negative_total_rejected( $svc );
+		$this->test_add_payment_idempotent_replay( $svc );
+		$this->test_add_payment_different_keys( $svc );
 	}
 
 	private function base_data(): array {
@@ -216,6 +218,42 @@ class SaleServiceTest {
 		$sale = $svc->find( $id );
 		assert( $sale['status'] === 'lunas', "Status harus 'lunas' setelah bayar penuh." );
 		echo "  [PASS] test_add_payment_lunas\n";
+	}
+
+	/**
+	 * C-13: pengiriman ulang pembayaran penjualan dengan kunci yang sama
+	 * mengembalikan ID pembayaran lama — 1 baris, paid_amount tidak
+	 * bertambah. Replay tetap berhasil walau dokumen sudah 'lunas'.
+	 */
+	private function test_add_payment_idempotent_replay( SaleService $svc ): void {
+		$id = $svc->createDraft( $this->base_data() );
+		$svc->publish( $id );
+		$key   = 'pos-klik-ganda-001';
+		$first = $svc->addPayment( $id, [ 'method' => 'tunai', 'amount' => 100000, 'created_by' => 1, 'idempotency_key' => $key ] );
+		$second = $svc->addPayment( $id, [ 'method' => 'tunai', 'amount' => 100000, 'created_by' => 1, 'idempotency_key' => $key ] );
+		assert( $second === $first, 'Replay harus mengembalikan ID pembayaran yang sama.' );
+		assert( count( $svc->getPayments( $id ) ) === 1, 'Hanya boleh ada 1 baris pembayaran untuk dokumen ini.' );
+		$sale = $svc->find( $id );
+		assert( (int) $sale['paid_amount'] === 100000, 'paid_amount harus tetap 100000 — replay tidak boleh menambah bayar.' );
+		assert( $sale['status'] === 'lunas', "Status tetap 'lunas'." );
+		$found = $svc->findByIdempotencyKey( $id, $key );
+		assert( $found !== null && (int) $found['id'] === $first, 'findByIdempotencyKey harus menemukan pembayaran lama.' );
+		echo "  [PASS] test_add_payment_idempotent_replay\n";
+	}
+
+	/**
+	 * C-13: dua kunci berbeda adalah dua pembayaran berbeda.
+	 */
+	private function test_add_payment_different_keys( SaleService $svc ): void {
+		$id = $svc->createDraft( $this->base_data() );
+		$svc->publish( $id );
+		$first = $svc->addPayment( $id, [ 'method' => 'tunai', 'amount' => 50000, 'created_by' => 1, 'idempotency_key' => 'pos-kunci-a' ] );
+		$second = $svc->addPayment( $id, [ 'method' => 'tunai', 'amount' => 50000, 'created_by' => 1, 'idempotency_key' => 'pos-kunci-b' ] );
+		assert( $second !== $first, 'Kunci berbeda harus menghasilkan pembayaran berbeda.' );
+		assert( count( $svc->getPayments( $id ) ) === 2, 'Dokumen harus punya 2 baris pembayaran.' );
+		$sale = $svc->find( $id );
+		assert( (int) $sale['paid_amount'] === 100000, 'paid_amount harus 100000 setelah dua pembayaran 50000.' );
+		echo "  [PASS] test_add_payment_different_keys\n";
 	}
 
 	private function test_void_draft_ok( SaleService $svc ): void {

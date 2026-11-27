@@ -1,6 +1,7 @@
 <?php
 namespace SagaraBaja\Core\Document;
 
+use SagaraBaja\Core\Database\Transaction;
 use SagaraBaja\Core\Audit\AuditLogger;
 
 if ( ! defined( 'ABSPATH' ) && ! defined( 'SB_TEST_SUITE' ) ) {
@@ -32,7 +33,7 @@ class NumberingService {
         $now = $date ?? new \DateTimeImmutable( 'now', new \DateTimeZone( 'Asia/Jakarta' ) );
 
         // Buka transaksi database untuk isolasi ketat
-        $this->wpdb->query( 'START TRANSACTION' );
+        Transaction::begin( $this->wpdb );
 
         try {
             // Row-lock record sequence dengan FOR UPDATE
@@ -89,7 +90,7 @@ class NumberingService {
             }
 
             // Commit transaksi
-            $this->wpdb->query( 'COMMIT' );
+            Transaction::commit( $this->wpdb );
 
             // Format nomor dokumen
             $period_slug = $current_period ? $current_period . '/' : '';
@@ -108,7 +109,7 @@ class NumberingService {
             return $formatted;
 
         } catch ( \Throwable $e ) {
-            $this->wpdb->query( 'ROLLBACK' );
+            Transaction::rollback( $this->wpdb );
             throw new \RuntimeException( "Gagal menerbitkan nomor dokumen: " . $e->getMessage(), 0, $e );
         }
     }

@@ -1,6 +1,8 @@
 <?php
 namespace SagaraBaja\Modules\Purchasing\Services;
 
+use SagaraBaja\Core\Database\Transaction;
+use SagaraBaja\Core\Audit\AuditLogger;
 use SagaraBaja\Core\Document\NumberingService;
 use SagaraBaja\Modules\Inventory\Services\StockService;
 
@@ -30,13 +32,13 @@ if ( ! defined( 'ABSPATH' ) && ! defined( 'SB_TEST_SUITE' ) ) {
  *    hutang adalah Sprint 4 (Accounting); tidak ada metode bayar di sini.
  * 7. Semua langkah dibungkus database transaction.
  *
- * Catatan transaksi (diwarisi dari pola SaleService/StockService yang ada):
- * NumberingService dan StockService masing-masing menjalankan transaksi
- * sendiri (START TRANSACTION/COMMIT). Di MySQL nyata, COMMIT di dalam
- * keduanya bersifat progresif terhadap transaksi luar. Risiko ini ditekan
- * dengan memvalidasi SELURUH baris sebelum mutasi pertama, sehingga
- * kegagalan setelah stok mulai bergerak hampir tidak mungkin terjadi
- * (hanya kegagalan tulis database). Lihat PROGRESS.md bagian risiko Sprint 3.
+ * Catatan transaksi (C-01, diperbaiki 27 Nov 2026): semua batas transaksi
+ * di sini, di NumberingService, dan di StockService memakai
+ * Core\Database\Transaction (penghitung kedalaman). COMMIT di dalam
+ * layanan yang dipanggil TIDAK LAGI meng-commit transaksi luar: bila
+ * penerimaan gagal di langkah akhir, ROLLBACK membatalkan mutasi stok
+ * dan nomor tanda terima sekaligus. Validasi seluruh baris sebelum
+ * mutasi pertama tetap dipertahankan sebagai pertahanan kedua.
  */
 class GoodsReceiptService {
 
@@ -91,7 +93,7 @@ class GoodsReceiptService {
 			throw new \RuntimeException( "Penerimaan hanya bisa dilakukan untuk PO berstatus 'disetujui' atau 'diterima_sebagian'. Status saat ini: {$po['status']}." );
 		}
 
-		$this->wpdb->query( 'START TRANSACTION' );
+		Transaction::begin( $this->wpdb );
 		try {
 			// Kunci baris PO dan validasi ulang terhadap data terbaru di dalam
 			// transaksi — dua penerimaan bersamaan tidak boleh sama-sama lolos
@@ -156,11 +158,22 @@ class GoodsReceiptService {
 			$new_status = $this->calcPoStatusAfterReceipt( $po_id );
 			$this->wpdb->update( $this->t_pos(), [ 'status' => $new_status ], [ 'id' => $po_id ] );
 
-			$this->wpdb->query( 'COMMIT' );
+			// C-05: jejak penerimaan barang di audit log (sebelumnya tidak
+			// ada entri khusus goods_receipt; penerimaan hanya terlihat
+			// lewat mutasi stok dan nomor tanda terima).
+			AuditLogger::log(
+				'goods_receipt',
+				'goods_receipt',
+				$receipt_no,
+				[ 'po_id' => $po_id, 'po_number' => $po['doc_number'], 'status' => $po['status'] ],
+				[ 'receipt_id' => $receipt_id, 'status' => $new_status, 'received_by' => $received_by, 'items' => $clean ]
+			);
+
+			Transaction::commit( $this->wpdb );
 			return $receipt_id;
 
 		} catch ( \Throwable $e ) {
-			$this->wpdb->query( 'ROLLBACK' );
+			Transaction::rollback( $this->wpdb );
 			throw $e;
 		}
 	}

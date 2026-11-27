@@ -3,11 +3,38 @@ namespace SagaraBaja\Tests\Purchasing;
 
 require_once __DIR__ . '/../../tests/bootstrap.php';
 
+use SagaraBaja\Core\Database\Transaction;
 use SagaraBaja\Core\Document\NumberingService;
 use SagaraBaja\Modules\Sales\Repositories\SupplierRepository;
 use SagaraBaja\Modules\Inventory\Services\StockService;
 use SagaraBaja\Modules\Purchasing\Services\PurchaseOrderService;
 use SagaraBaja\Modules\Purchasing\Services\GoodsReceiptService;
+
+/**
+ * StockService ganda untuk tes C-01: add_stock pertama berhasil, yang
+ * kedua melempar — mensimulasikan kegagalan tulis di tengah penerimaan.
+ */
+class FailingSecondAddStockService extends StockService {
+	public int $calls = 0;
+
+	public function add_stock(
+		int $product_id,
+		int $warehouse_id,
+		float $qty,
+		string $ref_type,
+		?string $ref_id = null,
+		?int $unit_id = null,
+		int $unit_cost = 0,
+		?string $notes = null,
+		?int $user_id = null
+	): array {
+		$this->calls++;
+		if ( $this->calls >= 2 ) {
+			throw new \RuntimeException( 'Simulasi gagal di tengah penerimaan (C-01).' );
+		}
+		return parent::add_stock( $product_id, $warehouse_id, $qty, $ref_type, $ref_id, $unit_id, $unit_cost, $notes, $user_id );
+	}
+}
 
 class GoodsReceiptTest {
 	private PurchaseOrderService $po_svc;
@@ -28,6 +55,7 @@ class GoodsReceiptTest {
 		$this->test_partial_receipt_status();
 		$this->test_full_receipt_status();
 		$this->test_receipt_adds_stock_exactly_once();
+		$this->test_receipt_writes_audit_log();
 		$this->test_over_receipt_rejected();
 		$this->test_receipt_on_draft_rejected();
 		$this->test_receipt_on_cancelled_rejected();
@@ -35,6 +63,7 @@ class GoodsReceiptTest {
 		$this->test_receipt_unknown_po_item_rejected();
 		$this->test_receipt_zero_qty_rejected();
 		$this->test_payable_after_receipt();
+		$this->test_failed_receipt_rolls_back_stock_and_number();
 	}
 
 	private function seedMaster( $wpdb ): void {
@@ -130,6 +159,33 @@ class GoodsReceiptTest {
 		assert( round( $after['moves_sum'] - $before_moves['moves_sum'], 4 ) === 3.0, "Mutasi stok harus bertambah tepat 3, bukan ganda." );
 		assert( $this->stock->get_balance( 1, 1 ) === 17.0, "Saldo produk 1 harus 17 (14 + 3)." );
 		echo "  [PASS] test_receipt_adds_stock_exactly_once\n";
+	}
+
+	/**
+	 * C-05: receive() harus menulis 1 entri audit 'goods_receipt' dengan
+	 * nomor tanda terima sebagai object_id dan status PO sesudah terima.
+	 */
+	private function test_receipt_writes_audit_log(): void {
+		global $wpdb;
+		[ $po_id, $item1, $item2 ] = $this->makeApprovedPo();
+		// Terima baris produk 2 agar saldo berjalan produk 1 yang
+		// ditegaskan tes-tes berikut tidak bergeser.
+		$receipt_id = $this->gr_svc->receive( $po_id, [
+			[ 'po_item_id' => $item2, 'qty_received' => 2 ],
+		], 1 );
+		$receipt = $this->gr_svc->findReceipt( $receipt_id );
+
+		$logs = array_values( array_filter(
+			$wpdb->tables['wp_sb_audit_logs'],
+			fn( $log ) => ( $log['action'] ?? '' ) === 'goods_receipt'
+				&& ( $log['object_id'] ?? '' ) === $receipt['receipt_number']
+		) );
+		assert( count( $logs ) === 1, 'Penerimaan harus menulis tepat 1 entri audit goods_receipt untuk tanda terima ini.' );
+		$new = json_decode( $logs[0]['new_values'] ?? '', true );
+		assert( (int) ( $new['receipt_id'] ?? 0 ) === $receipt_id, 'Audit baru harus mencatat receipt_id yang benar.' );
+		assert( ( $new['status'] ?? '' ) === 'diterima_sebagian', "Audit baru harus mencatat status PO 'diterima_sebagian'." );
+		assert( ( $logs[0]['object_type'] ?? '' ) === 'goods_receipt', "object_type audit harus 'goods_receipt'." );
+		echo "  [PASS] test_receipt_writes_audit_log\n";
 	}
 
 	private function test_over_receipt_rejected(): void {
@@ -244,5 +300,66 @@ class GoodsReceiptTest {
 		assert( (int) $po['paid_amount'] === 0, "paid_amount tetap 0 di Sprint 3 (bayar hutang = Sprint 4)." );
 		assert( $this->po_svc->getPayableAmount( $po_id ) === 600000, "Hutang usaha harus 600000 setelah penerimaan penuh." );
 		echo "  [PASS] test_payable_after_receipt\n";
+	}
+
+	/**
+	 * C-01 (regresi): penerimaan yang gagal di baris kedua — setelah stok
+	 * baris pertama sudah bertambah dan nomor tanda terima sudah
+	 * diterbitkan — harus membatalkan SEMUANYA: tidak ada tanda terima,
+	 * tidak ada mutasi stok, qty_received tetap 0, nomor GR tidak
+	 * terpakai, dan tidak ada entri audit goods_receipt.
+	 * Sebelum perbaikan, COMMIT bersarang di StockService/NumberingService
+	 * membuat mutasi pertama permanen walau receive() akhirnya ROLLBACK.
+	 */
+	private function test_failed_receipt_rolls_back_stock_and_number(): void {
+		global $wpdb;
+		[ $po_id, $item1, $item2 ] = $this->makeApprovedPo();
+
+		$numbering = new NumberingService( $wpdb );
+		$gr_before = $numbering->peek( 'goods_receipt' );
+		$balance1_before = $this->stock->get_balance( 1, 1 );
+		$balance2_before = $this->stock->get_balance( 2, 1 );
+		$audit_before = count( array_filter(
+			$wpdb->tables['wp_sb_audit_logs'],
+			fn( $log ) => ( $log['action'] ?? '' ) === 'goods_receipt'
+		) );
+
+		$failing_stock = new FailingSecondAddStockService( $wpdb );
+		$gr_failing    = new GoodsReceiptService( $wpdb, $numbering, $failing_stock, $this->po_svc );
+
+		$thrown = false;
+		try {
+			$gr_failing->receive( $po_id, [
+				[ 'po_item_id' => $item1, 'qty_received' => 10 ],
+				[ 'po_item_id' => $item2, 'qty_received' => 5 ],
+			], 1 );
+		} catch ( \RuntimeException $e ) {
+			$thrown = true;
+		}
+		assert( $thrown, 'Penerimaan yang gagal di baris kedua harus melempar.' );
+		assert( $failing_stock->calls === 2, 'add_stock harus sudah dipanggil 2 kali (baris 1 berhasil, baris 2 gagal).' );
+
+		assert( count( $this->po_svc->getReceipts( $po_id ) ) === 0, 'Tidak boleh ada tanda terima tersimpan dari penerimaan yang gagal.' );
+		$po = $this->po_svc->find( $po_id );
+		assert( $po['status'] === 'disetujui', "Status PO harus tetap 'disetujui'." );
+		$items = $this->po_svc->getItems( $po_id );
+		assert( (float) $items[0]['qty_received'] === 0.0, 'qty_received baris 1 harus tetap 0.' );
+		assert( (float) $items[1]['qty_received'] === 0.0, 'qty_received baris 2 harus tetap 0.' );
+
+		assert( $this->stock->get_balance( 1, 1 ) === $balance1_before, 'Saldo produk 1 harus kembali seperti sebelum penerimaan gagal.' );
+		assert( $this->stock->get_balance( 2, 1 ) === $balance2_before, 'Saldo produk 2 harus kembali seperti sebelum penerimaan gagal.' );
+		$rec = $this->stock->reconcile( 1, 1 );
+		assert( $rec['is_balanced'] === true, 'Kartu stok produk 1 harus tetap balance.' );
+
+		assert( $numbering->peek( 'goods_receipt' ) === $gr_before, 'Nomor urut GR tidak boleh terpakai oleh penerimaan yang gagal.' );
+
+		$audit_after = count( array_filter(
+			$wpdb->tables['wp_sb_audit_logs'],
+			fn( $log ) => ( $log['action'] ?? '' ) === 'goods_receipt'
+		) );
+		assert( $audit_after === $audit_before, 'Tidak boleh ada entri audit goods_receipt dari penerimaan yang gagal.' );
+
+		assert( Transaction::depth( $wpdb ) === 0, 'Kedalaman transaksi harus kembali 0 setelah kegagalan (tidak bocor).' );
+		echo "  [PASS] test_failed_receipt_rolls_back_stock_and_number\n";
 	}
 }

@@ -1,6 +1,8 @@
 <?php
 namespace SagaraBaja\Modules\Purchasing\Services;
 
+use SagaraBaja\Core\Database\Transaction;
+use SagaraBaja\Core\Audit\AuditLogger;
 use SagaraBaja\Core\Document\NumberingService;
 use SagaraBaja\Modules\Sales\Repositories\SupplierRepository;
 
@@ -80,7 +82,7 @@ class PurchaseOrderService {
 			throw new \InvalidArgumentException( 'Total akhir tidak boleh negatif. Periksa diskon.' );
 		}
 
-		$this->wpdb->query( 'START TRANSACTION' );
+		Transaction::begin( $this->wpdb );
 		try {
 			$doc_no = $this->numbering->generate( 'purchase_order' );
 
@@ -106,11 +108,11 @@ class PurchaseOrderService {
 			$po_id = (int) $this->wpdb->insert_id;
 			$this->insertItems( $po_id, $items );
 
-			$this->wpdb->query( 'COMMIT' );
+			Transaction::commit( $this->wpdb );
 			return $po_id;
 
 		} catch ( \Throwable $e ) {
-			$this->wpdb->query( 'ROLLBACK' );
+			Transaction::rollback( $this->wpdb );
 			throw $e;
 		}
 	}
@@ -123,7 +125,7 @@ class PurchaseOrderService {
 	 * @throws \RuntimeException jika PO tidak ditemukan atau status bukan 'draft'.
 	 */
 	public function approve( int $po_id ): void {
-		$this->wpdb->query( 'START TRANSACTION' );
+		Transaction::begin( $this->wpdb );
 		try {
 			$po = $this->lockPo( $po_id );
 			if ( $po['status'] !== 'draft' ) {
@@ -131,10 +133,22 @@ class PurchaseOrderService {
 			}
 
 			$this->wpdb->update( $this->t_pos, [ 'status' => 'disetujui' ], [ 'id' => $po_id ] );
-			$this->wpdb->query( 'COMMIT' );
+
+			// C-05: jejak persetujuan PO di audit log (sebelumnya tidak ada
+			// entri khusus po_approve; persetujuan hanya terlihat dari
+			// perubahan status tanpa jejak siapa/kapan di log).
+			AuditLogger::log(
+				'po_approve',
+				'purchase_order',
+				$po['doc_number'],
+				[ 'status' => 'draft' ],
+				[ 'status' => 'disetujui' ]
+			);
+
+			Transaction::commit( $this->wpdb );
 
 		} catch ( \Throwable $e ) {
-			$this->wpdb->query( 'ROLLBACK' );
+			Transaction::rollback( $this->wpdb );
 			throw $e;
 		}
 	}
@@ -151,7 +165,7 @@ class PurchaseOrderService {
 			throw new \InvalidArgumentException( 'Alasan pembatalan wajib diisi.' );
 		}
 
-		$this->wpdb->query( 'START TRANSACTION' );
+		Transaction::begin( $this->wpdb );
 		try {
 			$po = $this->lockPo( $po_id );
 			if ( $po['status'] === 'batal' ) {
@@ -168,10 +182,10 @@ class PurchaseOrderService {
 				'status'        => 'batal',
 				'cancel_reason' => $reason,
 			], [ 'id' => $po_id ] );
-			$this->wpdb->query( 'COMMIT' );
+			Transaction::commit( $this->wpdb );
 
 		} catch ( \Throwable $e ) {
-			$this->wpdb->query( 'ROLLBACK' );
+			Transaction::rollback( $this->wpdb );
 			throw $e;
 		}
 	}

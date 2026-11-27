@@ -745,6 +745,15 @@ class PosFrontend {
 			btn.disabled = true;
 			txt.textContent = 'Memproses Transaksi & Mutasi Stok...';
 
+			// C-13: satu token idempotensi per percobaan checkout. Bila
+			// permintaan yang sama terkirim dua kali, pembayaran dicatat
+			// sekali saja (SaleService::addPayment mengembalikan pembayaran
+			// lama). Catatan: percobaan ulang setelah gagal jaringan tetap
+			// membuat dokumen penjualan baru — di luar cakupan C-13.
+			const idemKey = (window.crypto && crypto.randomUUID)
+				? crypto.randomUUID()
+				: ('pos-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+
 			const payload = {
 				action: 'sb_pos_checkout',
 				_nonce: checkoutNonce,
@@ -755,6 +764,7 @@ class PosFrontend {
 				discount_amount: disc,
 				payment_method: method,
 				paid_amount: paid,
+				idempotency_key: idemKey,
 				items: cart.map(i => ({
 					product_id: i.id,
 					unit_id: i.unit_id,
@@ -945,10 +955,11 @@ class PosFrontend {
 				}
 
 				$sales->addPayment( $sale_id, [
-					'method'     => $method,
-					'amount'     => $applied_amount,
-					'created_by' => $user_id,
-					'notes'      => $notes,
+					'method'          => $method,
+					'amount'          => $applied_amount,
+					'created_by'      => $user_id,
+					'idempotency_key' => sanitize_text_field( $data['idempotency_key'] ?? '' ),
+					'notes'           => $notes,
 				] );
 
 				$sale = $sales->find( $sale_id );

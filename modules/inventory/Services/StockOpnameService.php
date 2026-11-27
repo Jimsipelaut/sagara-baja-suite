@@ -1,6 +1,7 @@
 <?php
 namespace SagaraBaja\Modules\Inventory\Services;
 
+use SagaraBaja\Core\Database\Transaction;
 use SagaraBaja\Core\Audit\AuditLogger;
 use SagaraBaja\Core\Document\NumberingService;
 
@@ -44,7 +45,7 @@ class StockOpnameService {
         $opname_number = $this->numbering_service->generate( 'stock_opname' );
         $user_id = $user_id ?? get_current_user_id();
 
-        $this->wpdb->query( "START TRANSACTION" );
+        Transaction::begin( $this->wpdb );
 
         try {
             $this->wpdb->insert(
@@ -90,11 +91,11 @@ class StockOpnameService {
                 [ 'items_count' => count( $items ), 'warehouse_id' => $warehouse_id ]
             );
 
-            $this->wpdb->query( "COMMIT" );
+            Transaction::commit( $this->wpdb );
 
             return $opname_id;
         } catch ( \Throwable $e ) {
-            $this->wpdb->query( "ROLLBACK" );
+            Transaction::rollback( $this->wpdb );
             throw $e;
         }
     }
@@ -123,7 +124,7 @@ class StockOpnameService {
 
         $approver_id = $approver_id ?? get_current_user_id();
 
-        $this->wpdb->query( "START TRANSACTION" );
+        Transaction::begin( $this->wpdb );
 
         try {
             foreach ( $items as $item ) {
@@ -182,11 +183,11 @@ class StockOpnameService {
                 [ 'status' => 'approved', 'approved_by' => $approver_id ]
             );
 
-            $this->wpdb->query( "COMMIT" );
+            Transaction::commit( $this->wpdb );
 
             return true;
         } catch ( \Throwable $e ) {
-            $this->wpdb->query( "ROLLBACK" );
+            Transaction::rollback( $this->wpdb );
             throw $e;
         }
     }

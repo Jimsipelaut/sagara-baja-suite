@@ -241,10 +241,15 @@ class PurchasingAdmin {
 		// Formulir catat pembayaran
 		if ( $can_pay ) {
 			$nonce = wp_create_nonce( 'sb_supplier_payment' );
+			// C-13: satu token idempotensi per tampilan formulir. Pengiriman
+			// ulang (klik ganda / refresh setelah submit) memakai kunci yang
+			// sama dan mengembalikan pembayaran lama, bukan mencatat baru.
+			$idem_key = wp_generate_uuid4();
 			echo '<h2>Catat Pembayaran Hutang</h2>';
 			echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '" style="background:#fff;padding:16px;border:1px solid #ccd0d4;max-width:600px">';
 			echo '<input type="hidden" name="action" value="sb_supplier_payment">';
 			echo '<input type="hidden" name="_wpnonce" value="' . esc_attr( $nonce ) . '">';
+			echo '<input type="hidden" name="idempotency_key" value="' . esc_attr( $idem_key ) . '">';
 			echo '<input type="hidden" name="po_id" value="' . esc_attr( $po_id ) . '">';
 			echo '<p><label>Jumlah Bayar (Rp):</label><br><input type="number" name="amount" value="' . esc_attr( $out['outstanding'] ) . '" min="1" max="' . esc_attr( $out['outstanding'] ) . '" required></p>';
 			echo '<p class="description">Sisa hutang: Rp ' . esc_html( number_format( $out['outstanding'], 0, ',', '.' ) ) . '. Jumlah bayar tidak boleh melebihi sisa hutang.</p>';
@@ -346,12 +351,13 @@ class PurchasingAdmin {
 		$po_id = (int) ( $_POST['po_id'] ?? 0 );
 		try {
 			$result = $this->payment_service->recordPayment( $po_id, [
-				'amount'       => (int) ( $_POST['amount'] ?? 0 ),
-				'method'       => sanitize_text_field( $_POST['method'] ?? 'tunai' ),
-				'payment_date' => sanitize_text_field( $_POST['payment_date'] ?? '' ),
-				'reference'    => sanitize_text_field( $_POST['reference'] ?? '' ),
-				'notes'        => sanitize_textarea_field( $_POST['notes'] ?? '' ),
-				'created_by'   => get_current_user_id(),
+				'amount'          => (int) ( $_POST['amount'] ?? 0 ),
+				'method'          => sanitize_text_field( $_POST['method'] ?? 'tunai' ),
+				'payment_date'    => sanitize_text_field( $_POST['payment_date'] ?? '' ),
+				'reference'       => sanitize_text_field( $_POST['reference'] ?? '' ),
+				'notes'           => sanitize_textarea_field( $_POST['notes'] ?? '' ),
+				'idempotency_key' => sanitize_text_field( $_POST['idempotency_key'] ?? '' ),
+				'created_by'      => get_current_user_id(),
 			] );
 			// Audit log sudah dicatat di dalam SupplierPaymentService — tidak diulang di sini.
 			wp_redirect( admin_url( 'admin.php?page=sb-purchasing&po_id=' . $po_id . '&paid=1&payment=' . (int) $result['payment_id'] ) );

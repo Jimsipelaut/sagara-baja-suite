@@ -1,6 +1,7 @@
 <?php
 namespace SagaraBaja\Modules\Inventory\Services;
 
+use SagaraBaja\Core\Database\Transaction;
 use SagaraBaja\Core\Audit\AuditLogger;
 use SagaraBaja\Modules\Inventory\Repositories\ProductRepository;
 
@@ -47,7 +48,7 @@ class CsvImportService {
         $imported = 0;
         $errors   = [];
 
-        $this->wpdb->query( "START TRANSACTION" );
+        Transaction::begin( $this->wpdb );
 
         try {
             foreach ( $rows as $index => $row ) {
@@ -112,11 +113,11 @@ class CsvImportService {
             }
 
             if ( ! empty( $errors ) && $imported === 0 ) {
-                $this->wpdb->query( "ROLLBACK" );
+                Transaction::rollback( $this->wpdb );
                 return [ 'success' => false, 'imported' => 0, 'errors' => $errors ];
             }
 
-            $this->wpdb->query( "COMMIT" );
+            Transaction::commit( $this->wpdb );
 
             AuditLogger::log(
                 'import_csv_products',
@@ -132,7 +133,7 @@ class CsvImportService {
                 'errors'   => $errors,
             ];
         } catch ( \Throwable $e ) {
-            $this->wpdb->query( "ROLLBACK" );
+            Transaction::rollback( $this->wpdb );
             throw $e;
         }
     }

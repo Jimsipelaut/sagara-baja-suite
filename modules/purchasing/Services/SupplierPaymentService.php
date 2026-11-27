@@ -1,6 +1,7 @@
 <?php
 namespace SagaraBaja\Modules\Purchasing\Services;
 
+use SagaraBaja\Core\Database\Transaction;
 use SagaraBaja\Core\Audit\AuditLogger;
 use SagaraBaja\Core\Document\NumberingService;
 use SagaraBaja\Modules\Sales\Repositories\SupplierRepository;
@@ -36,13 +37,20 @@ if ( ! defined( 'ABSPATH' ) && ! defined( 'SB_TEST_SUITE' ) ) {
  * 8. Slice ini TIDAK membuat jurnal dan TIDAK menggerakkan kas/bank.
  *    Yang dicatat hanya baris pembayaran + paid_amount. Jurnal otomatis
  *    dan kas/bank adalah sisa Sprint 4 dan tetap terbuka.
+ * 9. Idempotensi (C-13): pemanggil boleh menyertakan 'idempotency_key'
+ *    (satu token per pengiriman formulir). Pengiriman ulang dengan kunci
+ *    yang sama mengembalikan pembayaran yang sudah tercatat, bukan
+ *    mencatat yang baru — klik ganda tidak menggandakan pembayaran.
+ *    Kunci disimpan di kolom idempotency_key dengan UNIQUE KEY sebagai
+ *    pengaman terakhir di database; tanpa kunci, perilaku lama berlaku.
  *
- * Catatan transaksi (diwarisi dari pola GoodsReceiptService yang ada):
- * NumberingService menjalankan transaksi sendiri (START TRANSACTION/COMMIT).
- * Di MySQL nyata, COMMIT di dalamnya bersifat progresif terhadap transaksi
- * luar. Risiko ini ditekan dengan memvalidasi SELURUH aturan sebelum
- * menulis baris pertama, sehingga kegagalan setelah nomor diterbitkan
- * hampir tidak mungkin terjadi (hanya kegagalan tulis database).
+ * Catatan transaksi (C-01, diperbaiki 27 Nov 2026): semua batas transaksi
+ * di sini dan di NumberingService memakai Core\Database\Transaction
+ * (penghitung kedalaman). COMMIT di dalam NumberingService TIDAK LAGI
+ * meng-commit transaksi luar: bila pencatatan gagal setelah nomor
+ * diterbitkan, ROLLBACK membatalkan nomor dan baris pembayaran sekaligus.
+ * Validasi seluruh aturan sebelum menulis baris pertama tetap
+ * dipertahankan sebagai pertahanan kedua.
  */
 class SupplierPaymentService {
 
@@ -79,6 +87,7 @@ class SupplierPaymentService {
 	 *   payment_date?:string,
 	 *   reference?:string,
 	 *   notes?:string,
+	 *   idempotency_key?:string,
 	 *   created_by:int
 	 * } $payment
 	 * @return array{
@@ -89,6 +98,9 @@ class SupplierPaymentService {
 	 *   outstanding:int,
 	 *   status:string
 	 * } status 'lunas' bila paid_amount == grand_total, jika tidak 'sebagian'.
+	 * Bila 'idempotency_key' sudah pernah tercatat untuk PO ini, yang
+	 * dikembalikan adalah pembayaran lama tersebut (tanpa baris baru dan
+	 * tanpa audit log baru).
 	 * @throws \InvalidArgumentException
 	 * @throws \RuntimeException
 	 */
@@ -97,6 +109,8 @@ class SupplierPaymentService {
 		if ( $amount <= 0 ) {
 			throw new \InvalidArgumentException( 'Jumlah bayar harus lebih dari nol.' );
 		}
+
+		$idem_key = self::normalizeIdempotencyKey( $payment['idempotency_key'] ?? null );
 
 		$method = $payment['method'] ?? 'tunai';
 		if ( ! in_array( $method, [ 'tunai', 'transfer' ], true ) ) {
@@ -119,13 +133,27 @@ class SupplierPaymentService {
 		}
 		$this->assertPayableStatus( $po );
 
-		$this->wpdb->query( 'START TRANSACTION' );
+		Transaction::begin( $this->wpdb );
 		try {
 			// Kunci baris PO dan validasi ulang terhadap data terbaru di dalam
 			// transaksi — dua pembayaran bersamaan tidak boleh sama-sama lolos
 			// cek sisa hutang.
 			$po = $this->lockPo( $po_id );
 			$this->assertPayableStatus( $po );
+
+			// C-13: replay dicek SEBELUM cek sisa hutang — pembayaran
+			// pertama bisa saja sudah membuat sisa hutang lebih kecil dari
+			// jumlahnya sendiri (mis. PO dilunasi pembayaran lain sesudah
+			// itu), dan pengiriman ulang dengan kunci yang sama tetap harus
+			// mengembalikan pembayaran lama, bukan ditolak overpayment.
+			if ( $idem_key !== null ) {
+				$existing = $this->findByIdempotencyKey( $po_id, $idem_key );
+				if ( $existing !== null ) {
+					Transaction::commit( $this->wpdb );
+					return $this->buildResultFromRow( $existing, $po );
+				}
+			}
+
 			if ( count( $this->po_service->getReceipts( $po_id ) ) === 0 ) {
 				throw new \RuntimeException( 'PO ini belum ada penerimaan barang, jadi belum ada hutang yang bisa dibayar.' );
 			}
@@ -150,10 +178,21 @@ class SupplierPaymentService {
 				'method'            => $method,
 				'amount'            => $amount,
 				'reference'         => $payment['reference'] ?? null,
+				'idempotency_key'   => $idem_key,
 				'notes'             => $payment['notes'] ?? null,
 				'created_by'        => (int) $payment['created_by'],
 			] );
 			if ( $ok === false ) {
+				// C-13: pengaman terakhir — bila dua pengiriman bersamaan
+				// sama-sama lolos cek di atas, UNIQUE KEY menolak yang kedua.
+				// Kembalikan pembayaran pertama, bukan error.
+				if ( $idem_key !== null && stripos( (string) $this->wpdb->last_error, 'Duplicate' ) !== false ) {
+					$existing = $this->findByIdempotencyKey( $po_id, $idem_key );
+					if ( $existing !== null ) {
+						Transaction::commit( $this->wpdb );
+						return $this->buildResultFromRow( $existing, $po );
+					}
+				}
 				throw new \RuntimeException( 'Gagal mencatat pembayaran hutang: ' . $this->wpdb->last_error );
 			}
 			$payment_id = (int) $this->wpdb->insert_id;
@@ -174,7 +213,7 @@ class SupplierPaymentService {
 				[ 'payment_number' => $payment_no, 'amount' => $amount, 'method' => $method, 'paid_amount' => $new_paid, 'outstanding' => $new_outstanding, 'status' => $status ]
 			);
 
-			$this->wpdb->query( 'COMMIT' );
+			Transaction::commit( $this->wpdb );
 
 			return [
 				'payment_id'     => $payment_id,
@@ -186,7 +225,7 @@ class SupplierPaymentService {
 			];
 
 		} catch ( \Throwable $e ) {
-			$this->wpdb->query( 'ROLLBACK' );
+			Transaction::rollback( $this->wpdb );
 			throw $e;
 		}
 	}
@@ -198,6 +237,60 @@ class SupplierPaymentService {
 			$this->wpdb->prepare( "SELECT * FROM {$this->t_payments} WHERE id = %d", $payment_id ),
 			ARRAY_A
 		) ?: null;
+	}
+
+	/**
+	 * Cari pembayaran hutang atas PO ini berdasarkan kunci idempotensi.
+	 * Dipakai C-13 (pengiriman ulang) dan handler admin (hindari audit
+	 * ganda). Mengembalikan null bila kunci tidak pernah tercatat.
+	 */
+	public function findByIdempotencyKey( int $po_id, string $key ): ?array {
+		$key = self::normalizeIdempotencyKey( $key );
+		if ( $key === null ) {
+			return null;
+		}
+		foreach ( $this->getPaymentsByPo( $po_id ) as $row ) {
+			if ( ( $row['idempotency_key'] ?? null ) === $key ) {
+				return $row;
+			}
+		}
+		return null;
+	}
+
+	/**
+	 * Normalisasi kunci idempotensi: kosong → null (tanpa kunci, perilaku
+	 * lama); maks. 64 karakter [A-Za-z0-9_-]; selain itu ditolak.
+	 */
+	public static function normalizeIdempotencyKey( $key ): ?string {
+		if ( $key === null ) {
+			return null;
+		}
+		$key = trim( (string) $key );
+		if ( $key === '' ) {
+			return null;
+		}
+		if ( strlen( $key ) > 64 || ! preg_match( '/^[A-Za-z0-9_-]+$/', $key ) ) {
+			throw new \InvalidArgumentException( 'Kunci idempotensi tidak valid (maks. 64 karakter, huruf/angka/-/_).' );
+		}
+		return $key;
+	}
+
+	/**
+	 * Susun hasil recordPayment dari baris pembayaran yang sudah ada
+	 * (jalur replay C-13). paid_amount/outstanding/status dibaca dari
+	 * keadaan PO saat ini — pembayaran lama sudah termasuk di dalamnya.
+	 */
+	private function buildResultFromRow( array $row, array $po ): array {
+		$paid_amount    = (int) $po['paid_amount'];
+		$new_outstanding = (int) $po['grand_total'] - $paid_amount;
+		return [
+			'payment_id'     => (int) $row['id'],
+			'payment_number' => (string) $row['payment_number'],
+			'amount'         => (int) $row['amount'],
+			'paid_amount'    => $paid_amount,
+			'outstanding'    => $new_outstanding,
+			'status'         => $new_outstanding === 0 ? 'lunas' : 'sebagian',
+		];
 	}
 
 	public function getPaymentsByPo( int $po_id ): array {

@@ -1,6 +1,7 @@
 <?php
 namespace SagaraBaja\Modules\Inventory\Services;
 
+use SagaraBaja\Core\Database\Transaction;
 use SagaraBaja\Core\Audit\AuditLogger;
 
 if ( ! defined( 'ABSPATH' ) && ! defined( 'SB_TEST_SUITE' ) ) {
@@ -55,7 +56,7 @@ class StockService {
         // Konversi kuantitas ke satuan dasar produk
         $base_qty = $this->conversion_service->convert( $qty, $unit_id, $base_unit_id, $product_id );
 
-        $this->wpdb->query( "START TRANSACTION" );
+        Transaction::begin( $this->wpdb );
 
         try {
             // Kunci baris saldo untuk gudang dan produk tersebut
@@ -88,7 +89,7 @@ class StockService {
                 [ 'qty' => $new_balance, 'delta' => $base_qty, 'ref_type' => $ref_type, 'ref_id' => $ref_id ]
             );
 
-            $this->wpdb->query( "COMMIT" );
+            Transaction::commit( $this->wpdb );
 
             return [
                 'success'         => true,
@@ -100,7 +101,7 @@ class StockService {
                 'balance_after'   => $new_balance,
             ];
         } catch ( \Throwable $e ) {
-            $this->wpdb->query( "ROLLBACK" );
+            Transaction::rollback( $this->wpdb );
             throw $e;
         }
     }
@@ -131,7 +132,7 @@ class StockService {
         // Konversi kuantitas ke satuan dasar
         $base_qty = $this->conversion_service->convert( $qty, $unit_id, $base_unit_id, $product_id );
 
-        $this->wpdb->query( "START TRANSACTION" );
+        Transaction::begin( $this->wpdb );
 
         try {
             // Kunci baris saldo untuk mencegah race condition penjualan bersamaan
@@ -175,7 +176,7 @@ class StockService {
                 [ 'qty' => $new_balance, 'delta' => -$base_qty, 'ref_type' => $ref_type, 'ref_id' => $ref_id ]
             );
 
-            $this->wpdb->query( "COMMIT" );
+            Transaction::commit( $this->wpdb );
 
             return [
                 'success'         => true,
@@ -187,7 +188,7 @@ class StockService {
                 'balance_after'   => $new_balance,
             ];
         } catch ( \Throwable $e ) {
-            $this->wpdb->query( "ROLLBACK" );
+            Transaction::rollback( $this->wpdb );
             throw $e;
         }
     }
@@ -208,7 +209,7 @@ class StockService {
             throw new \InvalidArgumentException( "Gudang asal dan tujuan tidak boleh sama." );
         }
 
-        $this->wpdb->query( "START TRANSACTION" );
+        Transaction::begin( $this->wpdb );
 
         try {
             $transfer_ref = 'TRF-' . uniqid();
@@ -239,7 +240,7 @@ class StockService {
                 $user_id
             );
 
-            $this->wpdb->query( "COMMIT" );
+            Transaction::commit( $this->wpdb );
 
             return [
                 'success'      => true,
@@ -248,7 +249,7 @@ class StockService {
                 'in'           => $in,
             ];
         } catch ( \Throwable $e ) {
-            $this->wpdb->query( "ROLLBACK" );
+            Transaction::rollback( $this->wpdb );
             throw $e;
         }
     }
