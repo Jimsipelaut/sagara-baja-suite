@@ -3,6 +3,16 @@
  * Test Runner Sagara Baja Suite.
  */
 require_once __DIR__ . '/bootstrap.php';
+
+// Pengaman: seluruh suite memakai assert(). Di php.ini production
+// zend.assertions = -1 membuat assert() TIDAK dieksekusi sama sekali,
+// sehingga "SEMUA PENGUJIAN LULUS" akan tampil walau nilainya salah.
+// Jalankan dengan: php -d zend.assertions=1 -d assert.exception=1 tests/run.php
+if ( (int) ini_get( 'zend.assertions' ) !== 1 ) {
+	fwrite( STDERR, "BERHENTI: assert() tidak aktif di PHP ini (zend.assertions=" . ini_get( 'zend.assertions' ) . ").\n" );
+	fwrite( STDERR, "Jalankan: php -d zend.assertions=1 -d assert.exception=1 tests/run.php\n" );
+	exit( 2 );
+}
 require_once __DIR__ . '/Core/NumberingServiceTest.php';
 require_once __DIR__ . '/Core/AuditLoggerTest.php';
 require_once __DIR__ . '/Core/RolesTest.php';
@@ -17,6 +27,14 @@ require_once __DIR__ . '/Inventory/DummyDataSeederTest.php';
 
 // Sprint 2 Sales Test Suites
 require_once __DIR__ . '/Sales/SalesTest.php';
+require_once __DIR__ . '/Sales/ReceivablesAgingTest.php';
+
+// Sprint 3 Purchasing Test Suites
+require_once __DIR__ . '/Purchasing/PurchaseOrderTest.php';
+require_once __DIR__ . '/Purchasing/GoodsReceiptTest.php';
+
+// Sprint 4 (slice AP payment + Admin UI Purchasing) Test Suites
+require_once __DIR__ . '/Purchasing/SupplierPaymentTest.php';
 
 echo "=== Menjalankan Test Suite Sagara Baja Suite ===\n\n";
 
@@ -34,7 +52,11 @@ $tests = [
     'SupplierRepository'   => new \SagaraBaja\Tests\Sales\SupplierRepositoryTest(),
     'ShiftService'         => new \SagaraBaja\Tests\Sales\ShiftServiceTest(),
     'SaleService'          => new \SagaraBaja\Tests\Sales\SaleServiceTest(),
+    'ReceivablesAging'     => new \SagaraBaja\Tests\Sales\ReceivablesAgingTest(),
     'PdfInvoiceService'    => new \SagaraBaja\Tests\Sales\PdfInvoiceServiceTest(),
+    'PurchaseOrderService' => new \SagaraBaja\Tests\Purchasing\PurchaseOrderTest(),
+    'GoodsReceiptService'  => new \SagaraBaja\Tests\Purchasing\GoodsReceiptTest(),
+    'SupplierPaymentService' => new \SagaraBaja\Tests\Purchasing\SupplierPaymentTest(),
 ];
 
 $failed = 0;

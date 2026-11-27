@@ -158,10 +158,10 @@ Jika tidak memakai import dummy dan ingin input data sendiri:
 ## Menjalankan test suite (pengembang)
 
 ```bash
-php tests/run.php
+php -d zend.assertions=1 -d assert.exception=1 tests/run.php
 ```
 
-Semua test harus lulus (exit 0) sebelum commit ke `develop`.
+Semua test harus lulus (exit 0) sebelum commit ke `develop`. Flag `-d` wajib: tanpa itu `assert()` tidak aktif di php.ini production dan `tests/run.php` akan menolak jalan.
 
 ---
 

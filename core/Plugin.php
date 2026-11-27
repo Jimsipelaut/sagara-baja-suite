@@ -6,6 +6,7 @@ use SagaraBaja\Core\Database\Migrator;
 use SagaraBaja\Core\Admin\AdminMenu;
 use SagaraBaja\Core\Audit\AuditLogger;
 use SagaraBaja\Modules\Inventory\Admin\InventoryAdmin;
+use SagaraBaja\Modules\Purchasing\Admin\PurchasingAdmin;
 use SagaraBaja\Modules\Sales\Admin\SalesAdmin;
 
 if ( ! defined( 'ABSPATH' ) && ! defined( 'SB_TEST_SUITE' ) ) {
@@ -38,6 +39,7 @@ class Plugin {
             AdminMenu::register();
             InventoryAdmin::register();
             SalesAdmin::register();
+            PurchasingAdmin::register();
         }
 
         // Registrasi antarmuka Kasir POS Frontend & Shortcode [sb_pos]
